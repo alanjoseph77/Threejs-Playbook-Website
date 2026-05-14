@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi Pico PCB - 21mm × 51mm</title>
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://*; img-src 'self' data: blob: https://*; media-src 'self' data: blob: https://*; font-src 'self' data: https://*;">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px 15px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">Raspberry Pi Pico PCB: 21mm × 51mm × 1mm<br>Castellated Edges v2</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'OrbitControls';
+
+        let scene, camera, renderer, controls;
+
+        // --- Configuration (Global) ---
+        const boardLength = 5.1;  // 51mm scaled to cm (X-axis)
+        const boardWidth = 2.1;   // 21mm scaled to cm (Z-axis)
+        const boardThickness = 0.1; // 1mm scaled to cm (Y-axis)
+        const boardScale = 1; // 0.5 = half size, 2.0 = double size
+        const CORNER_RADIUS = 0.1; // Rounded corners
+
+        // Castellation (Half-Hole) Config
+        const PINS_PER_SIDE = 20;
+        const CASTELLATION_RADIUS = 0.05; // Size of the half-hole
+        const PIN_PITCH = 0.254; // Standard 2.54mm spacing scaled
+
+        // Castellation Position Adjustment
+        const castellationPositionX = 0; // Offset along X-axis (length)
+        const castellationPositionZ = 0; // Offset along Z-axis (width)
+
+        // Mounting holes
+        const MOUNTING_HOLE_RADIUS = 0.1;
+
+        // Internal holes configuration (20 holes on each side)
+        const INTERNAL_HOLES_COUNT = 20;
+        const INTERNAL_HOLE_SPACING = PIN_PITCH; // 2.54mm spacing (same as castellations)
+        const INTERNAL_HOLE_SIZE = CASTELLATION_RADIUS; // Small size like castellations
+        const INTERNAL_HOLES_OFFSET_FROM_EDGE = 0.2; // Distance from top/bottom edge (adjust this to move holes closer/farther from edge)
+        const INTERNAL_HOLES_X_OFFSET = 0; // Horizontal offset (shift all holes left/right)
+
+        // Helper Functions (defined before init so they can be called)
+        function createPCBShape(boardLength, boardWidth, holePositions) {
+            const shape = new THREE.Shape();
+            const w = boardLength / 2;
+            const h = boardWidth / 2;
+
+            // Define the range for the pins with position offset
+            const pinStartX = -(PINS_PER_SIDE - 1) * PIN_PITCH / 2 + castellationPositionX;
+
+            // --- 1. Top Edge (y = h + castellationPositionZ) ---
+            const topEdgeY = h + castellationPositionZ;
+            shape.moveTo(w - CORNER_RADIUS, topEdgeY);
+
+            // Top Edge castellations - Loop from Right to Left
+            for (let i = PINS_PER_SIDE - 1; i >= 0; i--) {
+                const pinX = pinStartX + (i * PIN_PITCH);
+                shape.lineTo(pinX + CASTELLATION_RADIUS, topEdgeY);
+                shape.absarc(pinX, topEdgeY, CASTELLATION_RADIUS, 0, Math.PI, true);
+            }
+
+            // Line to Top Left Corner
+            shape.lineTo(-w + CORNER_RADIUS, topEdgeY);
+            shape.quadraticCurveTo(-w, topEdgeY, -w, topEdgeY - CORNER_RADIUS);
+
+            // --- 2. Left Edge (x = -w) ---
+            const bottomEdgeY = -h - castellationPositionZ;
+            shape.lineTo(-w, bottomEdgeY + CORNER_RADIUS);
+            shape.quadraticCurveTo(-w, bottomEdgeY, -w + CORNER_RADIUS, bottomEdgeY);
+
+            // --- 3. Bottom Edge (y = -h - castellationPositionZ) ---
+            // Loop from Left to Right
+            for (let i = 0; i < PINS_PER_SIDE; i++) {
+                const pinX = pinStartX + (i * PIN_PITCH);
+                shape.lineTo(pinX - CASTELLATION_RADIUS, bottomEdgeY);
+                shape.absarc(pinX, bottomEdgeY, CASTELLATION_RADIUS, Math.PI, 0, true);
+            }
+
+            shape.lineTo(w - CORNER_RADIUS, bottomEdgeY);
+            shape.quadraticCurveTo(w, bottomEdgeY, w, bottomEdgeY + CORNER_RADIUS);
+
+            // --- 4. Right Edge (x = w) ---
+            shape.lineTo(w, topEdgeY - CORNER_RADIUS);
+            shape.quadraticCurveTo(w, topEdgeY, w - CORNER_RADIUS, topEdgeY);
+
+            // --- Internal Mounting Holes ---
+            holePositions.forEach((pos, index) => {
+                const holePath = new THREE.Path();
+                // First 4 holes use MOUNTING_HOLE_RADIUS, rest use INTERNAL_HOLE_SIZE
+                const radius = index < 4 ? MOUNTING_HOLE_RADIUS : INTERNAL_HOLE_SIZE;
+                holePath.absarc(pos.x, pos.y, radius, 0, Math.PI * 2, true);
+                shape.holes.push(holePath);
+            });
+
+            return shape;
+        }
+
+        function fixUVs(geometry, width, height) {
+            const uvAttribute = geometry.attributes.uv;
+            const posAttribute = geometry.attributes.position;
+            const count = uvAttribute.count;
+
+            for (let i = 0; i < count; i++) {
+                const x = posAttribute.getX(i);
+                const y = posAttribute.getY(i);
+                const u = (x + width / 2) / width;
+                const v = (y + height / 2) / height;
+                uvAttribute.setXY(i, u, v);
+            }
+            uvAttribute.needsUpdate = true;
+        }
+
+        function splitMaterials(geometry) {
+            if (!geometry.attributes.normal) geometry.computeVertexNormals();
+
+            const posAttribute = geometry.attributes.position;
+            const normalAttribute = geometry.attributes.normal;
+
+            if (!geometry.index) {
+                const indices = [];
+                for (let i = 0; i < posAttribute.count; i++) {
+                    indices.push(i);
+                }
+                geometry.setIndex(indices);
+            }
+
+            const indexAttribute = geometry.index;
+            geometry.clearGroups();
+
+            const topIndices = [];
+            const bottomIndices = [];
+            const sideIndices = [];
+
+            for (let i = 0; i < indexAttribute.count; i += 3) {
+                const a = indexAttribute.getX(i);
+                const b = indexAttribute.getX(i + 1);
+                const c = indexAttribute.getX(i + 2);
+                const nz = normalAttribute.getZ(a);
+
+                if (Math.abs(nz) > 0.9) {
+                    if (nz > 0) {
+                        topIndices.push(a, b, c);
+                    } else {
+                        bottomIndices.push(a, b, c);
+                    }
+                } else {
+                    sideIndices.push(a, b, c);
+                }
+            }
+
+            const newIndices = [...topIndices, ...bottomIndices, ...sideIndices];
+            geometry.setIndex(newIndices);
+
+            let offset = 0;
+            geometry.addGroup(offset, topIndices.length, 0);
+            offset += topIndices.length;
+            geometry.addGroup(offset, bottomIndices.length, 1);
+            offset += bottomIndices.length;
+            geometry.addGroup(offset, sideIndices.length, 2);
+        }
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(5.75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 30, 40); // Negative Y to view from below
+
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Load textures
+            const textureLoader = new THREE.TextureLoader();
+
+            // Top texture (R1.png)
+            const rTexture = textureLoader.load('R1.png');
+            rTexture.rotation = Math.PI / 2; // 90° rotation
+            rTexture.center.set(0.50, 0.50); // Set rotation center to middle of texture
+            rTexture.wrapS = THREE.ClampToEdgeWrapping;
+            rTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+            // Control texture coverage area (independent of board scale)
+            const textureWidthScale = 1.0;  // Texture width coverage
+            const textureLengthScale = 1.0; // Texture length coverage
+
+            // Adjust texture repeat based on board scale to maintain texture size
+            rTexture.repeat.set(textureWidthScale * boardScale, textureLengthScale * boardScale);
+            rTexture.offset.set(0, 0); // (horizontal offset, vertical offset)
+            rTexture.needsUpdate = true;
+
+            // Bottom texture - load backside image
+            const backTexture = textureLoader.load('back.png');
+
+            // Bottom texture rotation control (in radians)
+            backTexture.rotation = Math.PI / 2; // 90° rotation
+            backTexture.center.set(0.50, 0.50); // Set rotation center to middle of texture
+
+            // Bottom texture wrapping and coverage control
+            backTexture.wrapS = THREE.ClampToEdgeWrapping;
+            backTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+            // Control bottom texture coverage area (independent of board scale)
+            const backTextureWidthScale = 1.0;  // Bottom texture width coverage
+            const backTextureLengthScale = 1.01; // Bottom texture length coverage
+
+            // Adjust bottom texture repeat based on board scale to maintain texture size
+            backTexture.repeat.set(backTextureWidthScale * boardScale, backTextureLengthScale * boardScale);
+
+            // Control bottom texture position offset (0 to 1 range)
+            backTexture.offset.set(0, 0); // (horizontal offset, vertical offset)
+
+            backTexture.needsUpdate = true;
+
+            // Mounting holes positions
+            const holePositions = [
+                { x: -2.34, y: -0.58 },
+                { x: 2.33, y: -0.59 },
+                { x: -2.34, y: 0.53 },
+                { x: 2.34, y: 0.54 },
+                // Internal holes - Top side (20 holes)
+                { x: -2.415, y: 0.88 },
+                { x: -2.167, y: 0.88 },
+                { x: -1.907, y: 0.88 },
+                { x: -1.651, y: 0.88 },
+                { x: -1.397, y: 0.88 },
+                { x: -1.143, y: 0.88 },
+                { x: -0.889, y: 0.88 },
+                { x: -0.635, y: 0.88 },
+                { x: -0.381, y: 0.88 },
+                { x: -0.127, y: 0.88 },
+                { x: 0.127, y: 0.88 },
+                { x: 0.381, y: 0.88 },
+                { x: 0.635, y: 0.88 },
+                { x: 0.889, y: 0.88 },
+                { x: 1.143, y: 0.88 },
+                { x: 1.397, y: 0.88 },
+                { x: 1.651, y: 0.88 },
+                { x: 1.905, y: 0.88 },
+                { x: 2.159, y: 0.88 },
+                { x: 2.413, y: 0.88 },
+                // Internal holes - Bottom side (20 holes)
+                { x: -2.413, y: -0.89 },
+                { x: -2.159, y: -0.89 },
+                { x: -1.905, y: -0.89 },
+                { x: -1.651, y: -0.89 },
+                { x: -1.397, y: -0.89 },
+                { x: -1.143, y: -0.89 },
+                { x: -0.889, y: -0.89 },
+                { x: -0.635, y: -0.89 },
+                { x: -0.381, y: -0.89 },
+                { x: -0.127, y: -0.89 },
+                { x: 0.127, y: -0.89 },
+                { x: 0.381, y: -0.89 },
+                { x: 0.635, y: -0.89 },
+                { x: 0.889, y: -0.89 },
+                { x: 1.143, y: -0.89 },
+                { x: 1.397, y: -0.89 },
+                { x: 1.651, y: -0.89 },
+                { x: 1.905, y: -0.89 },
+                { x: 2.159, y: -0.89 },
+                { x: 2.413, y: -0.89 }
+            ];
+
+            // --- Geometry Generation ---
+            const shape = createPCBShape(boardLength, boardWidth, holePositions);
+
+            const extrudeSettings = {
+                steps: 1,
+                depth: boardThickness,
+                bevelEnabled: false,
+                curveSegments: 24
+            };
+
+            let geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            geometry.center();
+
+            // Fix UV mapping
+            fixUVs(geometry, boardLength, boardWidth);
+
+            // Split materials for top/bottom/sides
+            splitMaterials(geometry);
+
+            // Create materials
+            // 0: Top Face, 1: Bottom Face, 2: Sides (Castellations)
+            const materials = [
+                new THREE.MeshStandardMaterial({
+                    map: rTexture,
+                    color: 0xffffff,
+                    roughness: 0.3,
+                    metalness: 0.1
+                }),
+                new THREE.MeshStandardMaterial({
+                    map: backTexture,
+                    color: 0xffffff,
+                    roughness: 0.3
+                }),
+                new THREE.MeshStandardMaterial({
+                    color: 0xB87333, // Copper/Gold color for castellations
+                    roughness: 0.3,
+                    metalness: 0.8
+                })
+            ];
+
+            const pcbMesh = new THREE.Mesh(geometry, materials);
+
+            // Rotate to lay flat
+            pcbMesh.rotation.x = Math.PI / 2;
+
+            pcbMesh.castShadow = true;
+            pcbMesh.receiveShadow = true;
+            scene.add(pcbMesh);
+
+            // Add yellow rings around the 4 corner mounting holes (both top and bottom sides)
+            // Front (top) side ring positions
+            const frontRingHoles = [
+                { x: -2.34, y: -0.54 },
+                { x: 2.33, y: -0.55 },
+                { x: -2.34, y: 0.56 },
+                { x: 2.33, y: 0.58 }
+            ];
+
+            // Back (bottom) side ring positions
+            const backRingHoles = [
+                { x: -2.34, y: -0.54 },
+                { x: 2.33, y: -0.55 },
+                { x: -2.34, y: 0.56 },
+                { x: 2.33, y: 0.58 }
+            ];
+
+            const ringMaterial = new THREE.MeshStandardMaterial({
+                color: 0xFFD700, // Yellow/Gold color
+                roughness: 0.3,
+                metalness: 0.6
+            });
+
+            const ringInnerRadius = MOUNTING_HOLE_RADIUS;
+            const ringOuterRadius = MOUNTING_HOLE_RADIUS + 0.08; // Ring thickness
+
+            // Create ring geometry
+            const ringShape = new THREE.Shape();
+            ringShape.absarc(0, 0, ringOuterRadius, 0, Math.PI * 2, false);
+            const holePath = new THREE.Path();
+            holePath.absarc(0, 0, ringInnerRadius, 0, Math.PI * 2, true);
+            ringShape.holes.push(holePath);
+
+            const ringGeometry = new THREE.ExtrudeGeometry(ringShape, {
+                steps: 1,
+                depth: 0.005, // Thin ring on surface
+                bevelEnabled: false
+            });
+
+            // Front (top) side rings
+            frontRingHoles.forEach(hole => {
+                const topRing = new THREE.Mesh(ringGeometry, ringMaterial);
+                topRing.position.set(hole.x, boardThickness / 2 + 0.003, -hole.y);
+                topRing.rotation.x = -Math.PI / 2;
+                scene.add(topRing);
+            });
+
+            // Back (bottom) side rings
+            backRingHoles.forEach(hole => {
+                const bottomRing = new THREE.Mesh(ringGeometry, ringMaterial);
+                bottomRing.position.set(hole.x, -boardThickness / 2 - 0.003, -hole.y);
+                bottomRing.rotation.x = Math.PI / 2;
+                scene.add(bottomRing);
+            });
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Start animation loop
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+
+    </script>
+</body>
+
+</html>

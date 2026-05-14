@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realistic 3D PCB Board with Moving Dot Animation</title>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #333333;
+            font-size: 14px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333333;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #333333;
+            font-size: 12px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #333333;
+            max-width: calc(100vw - 40px);
+        }
+
+        #currentControls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #333333;
+            font-size: 12px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #333333;
+            max-width: calc(100vw - 40px);
+        }
+
+        #cameraPositionDisplay {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.6);
+            color: #0f0;
+            padding: 10px;
+            font-size: 12px;
+            border-radius: 5px;
+            z-index: 999;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 2px;
+            font-size: 14px;
+            min-height: 44px;
+            touch-action: manipulation;
+        }
+
+        button:hover, button:active {
+            background: #0056b3;
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            #controls {
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                max-width: none;
+                font-size: 11px;
+                padding: 8px;
+            }
+
+            #controls p {
+                margin: 4px 0;
+                font-size: 10px;
+            }
+
+            #currentControls {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                max-width: none;
+                padding: 8px;
+            }
+
+            #currentControls h4 {
+                margin: 5px 0;
+                font-size: 13px;
+            }
+
+            #cameraPositionDisplay {
+                bottom: auto;
+                top: 60px;
+                right: 10px;
+                font-size: 10px;
+                padding: 6px;
+            }
+
+            button {
+                padding: 8px 12px;
+                font-size: 12px;
+                margin: 3px;
+                min-height: 40px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #controls {
+                bottom: 5px;
+                left: 5px;
+                right: 5px;
+                padding: 6px;
+                font-size: 10px;
+            }
+
+            #controls p {
+                font-size: 9px;
+                margin: 3px 0;
+            }
+
+            #currentControls {
+                top: 5px;
+                right: 5px;
+                left: 5px;
+                padding: 6px;
+            }
+
+            #currentControls h4 {
+                font-size: 12px;
+                margin: 3px 0;
+            }
+
+            #cameraPositionDisplay {
+                display: none;
+            }
+
+            button {
+                padding: 6px 10px;
+                font-size: 11px;
+                margin: 2px;
+                min-height: 38px;
+            }
+        }
+
+        /* Landscape mobile orientation */
+        @media (max-width: 896px) and (orientation: landscape) {
+            #controls,
+            #currentControls {
+                font-size: 10px;
+                padding: 5px;
+            }
+
+            #currentControls {
+                max-width: 200px;
+                right: 5px;
+                left: auto;
+            }
+
+            #controls {
+                max-width: 200px;
+                left: 5px;
+                bottom: 5px;
+            }
+
+            button {
+                padding: 5px 8px;
+                font-size: 10px;
+                min-height: 32px;
+            }
+
+            #cameraPositionDisplay {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        
+
+        <div id="controls">
+            <p>🖱️ Mouse/Touch: Drag to rotate</p>
+            <p>🔍 Scroll/Pinch: Zoom in/out</p>
+            <p>🎯 Manual control only</p>
+            <button onclick="toggleAutoRotate()" id="autoRotateBtn">Start Slideshow</button>
+        </div>
+
+        <div id="currentControls">
+            <h4>Current Flow Controls</h4>
+            <button onclick="toggleCurrentFlow()">Toggle Current Flow</button>
+            <button onclick="increaseCurrentSpeed()">Speed +</button>
+            <button onclick="decreaseCurrentSpeed()">Speed -</button>
+            <p>Speed: <span id="speedDisplay">1.0x</span></p>
+        </div>
+
+        <div id="cameraPositionDisplay"
+            style="position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6); color: #0f0; padding: 10px; font-size: 12px; border-radius: 5px; z-index: 999;">
+            Camera: <span id="camPos">x: 0, y: 0, z: 0</span>
+            <div id="pcb"
+                style="background: rgba(0,0,0,0.6); color: #0f0; padding: 10px; font-size: 12px; border-radius: 5px; margin-top: 5px;">
+                PCB: <span id="camPos1">x: 0, y: 0, z: 0</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setClearColor(0xffffff);
+        document.getElementById('container').appendChild(renderer.domElement);
+        const clock = new THREE.Clock();
+
+        // Current flow animation variables
+        let currentFlowActive = true;
+        let currentSpeed = 1.0;
+        let currentDots = [];
+        
+        // Animation state for continuous flow
+        let globalOffset = 0;
+        const totalDotCount = 30; // Total number of dots in the flow
+
+        // Lighting setup
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(10, 10, 5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        scene.add(directionalLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 0.5, 50);
+        pointLight.position.set(0, 8, 0);
+        scene.add(pointLight);
+
+        // PCB Group
+        const pcbGroup = new THREE.Group();
+
+        // Create PCB board base
+        const boardGeometry = new THREE.BoxGeometry(26, 0.2, 11);
+        const boardMaterial = new THREE.MeshPhongMaterial({
+            color: 0x0d1b2a,
+            shininess: 30
+        });
+        const board = new THREE.Mesh(boardGeometry, boardMaterial);
+        board.receiveShadow = true;
+        pcbGroup.add(board);
+
+        function createIC(x, y, z, rotationY = 1.6, label = "U1") {
+            const icGroup = new THREE.Group();
+
+            // Create a canvas texture for the top label
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#1a1a1a'; // background matches chip color
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 42px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, canvas.width / 2, canvas.height / 2);
+
+            const textTexture = new THREE.CanvasTexture(canvas);
+            textTexture.minFilter = THREE.LinearFilter;
+
+            // Create materials: top face uses the label texture
+            const materials = [
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a }), // right
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a }), // left
+                new THREE.MeshPhongMaterial({ map: textTexture }), // top face with label ✅
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a }), // bottom
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a }), // front
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a })  // back
+            ];
+
+            const bodyGeometry = new THREE.BoxGeometry(1, 0.3, 1);
+            const body = new THREE.Mesh(bodyGeometry, materials);
+            icGroup.add(body);
+
+            // Pins - 8 per side
+            const pinGeometry = new THREE.BoxGeometry(0.08, 0.7, 0.03);
+            const pinMaterial = new THREE.MeshPhongMaterial({ color: 0xc0c0c0 });
+
+            for (let i = 0; i < 8; i++) {
+                const pinL = new THREE.Mesh(pinGeometry, pinMaterial);
+                pinL.position.set(-0.4, -0.5, -0.48 + i * 0.13);
+                icGroup.add(pinL);
+
+                const pinR = new THREE.Mesh(pinGeometry, pinMaterial);
+                pinR.position.set(0.4, -0.5, -0.48 + i * 0.13);
+                icGroup.add(pinR);
+            }
+
+            icGroup.position.set(x, y, z);
+            icGroup.rotation.y = rotationY;
+            icGroup.castShadow = true;
+
+            return icGroup;
+        }
+
+        function createIC1(x, y, z, rotationY = 1.6, label = "U1") {
+            const icGroup = new THREE.Group();
+
+            // Create a canvas texture for the top label
+            const canvas = document.createElement('canvas');
+            canvas.width = 246;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#1a1a1a'; // background matches chip color
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 42px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, canvas.width / 2, canvas.height / 2);
+
+            const textTexture = new THREE.CanvasTexture(canvas);
+            textTexture.minFilter = THREE.LinearFilter;
+
+            // Create materials: top face uses the label texture
+            const materials = [
+                new THREE.MeshPhongMaterial({ color: 0xC0C0C0 }), // right
+                new THREE.MeshPhongMaterial({ color: 0xC0C0C0 }), // left
+                new THREE.MeshPhongMaterial({ map: textTexture }), // top face with label ✅
+                new THREE.MeshPhongMaterial({ color: 0xC0C0C0 }), // bottom
+                new THREE.MeshPhongMaterial({ color: 0xC0C0C0 }), // front
+                new THREE.MeshPhongMaterial({ color: 0xC0C0C0 })  // back
+            ];
+
+            const bodyGeometry = new THREE.BoxGeometry(1.5, 0.2, 2.5);
+            const body = new THREE.Mesh(bodyGeometry, materials);
+            icGroup.add(body);
+
+            icGroup.position.set(x, y, z);
+            icGroup.rotation.y = rotationY;
+            icGroup.castShadow = true;
+
+            return icGroup;
+        }
+
+        function createIC2(x, y, z, rotationY = 1.6, label = "U1", labelRotationDeg = 90) {
+            const icGroup = new THREE.Group();
+
+            // Create a canvas texture for the top label
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#1a1a1a'; // match chip color
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Rotate the text on canvas
+            const angle = labelRotationDeg * Math.PI / 180; // degrees to radians
+            ctx.translate(canvas.width / 2, canvas.height / 2); // move to center
+            ctx.rotate(angle); // rotate canvas
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 42px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, 0, 0); // draw at center after rotation
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
+
+            const textTexture = new THREE.CanvasTexture(canvas);
+            textTexture.minFilter = THREE.LinearFilter;
+
+            // Create materials: top face uses the label texture
+            const materials = [
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a }), // right
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a }), // left
+                new THREE.MeshPhongMaterial({ map: textTexture }), // top face with label ✅
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a }), // bottom
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a }), // front
+                new THREE.MeshPhongMaterial({ color: 0x1a1a1a })  // back
+            ];
+
+            const bodyGeometry = new THREE.BoxGeometry(1, 0.3, 1);
+            const body = new THREE.Mesh(bodyGeometry, materials);
+            icGroup.add(body);
+
+            // Pins - 4 per side
+            const pinGeometry = new THREE.BoxGeometry(0.08, 0.7, 0.03);
+            const pinMaterial = new THREE.MeshPhongMaterial({ color: 0xc0c0c0 });
+
+            for (let i = 0; i < 4; i++) {
+                const pinL = new THREE.Mesh(pinGeometry, pinMaterial);
+                pinL.position.set(-0.4, -0.5, -0.20 + i * 0.11);
+                icGroup.add(pinL);
+
+                const pinR = new THREE.Mesh(pinGeometry, pinMaterial);
+                pinR.position.set(0.4, -0.5, -0.20 + i * 0.11);
+                icGroup.add(pinR);
+            }
+
+            icGroup.position.set(x, y, z);
+            icGroup.rotation.y = rotationY;
+            icGroup.castShadow = true;
+            icGroup.scale.set(0.7, 0.7, 0.7);
+            return icGroup;
+        }
+
+        function createSMD(x, y, z, label = '', rotationY = 1.5) {
+            const smdGroup = new THREE.Group();
+
+            // Green PCB Pad
+            const padGeometry = new THREE.BoxGeometry(1.2, 0.05, 0.6);
+            const padMaterial = new THREE.MeshPhongMaterial({ color: 0x3e7d3e });
+            const pad = new THREE.Mesh(padGeometry, padMaterial);
+            pad.position.set(0, -0.075, 0);
+            smdGroup.add(pad);
+
+            // Yellow solder pads
+            const padSize = [0.3, 0.1, 0.6];
+            const yellowMaterial = new THREE.MeshPhongMaterial({ color: 0xffd700 });
+
+            const leftPad = new THREE.Mesh(new THREE.BoxGeometry(...padSize), yellowMaterial);
+            leftPad.position.set(-0.45, 0, 0);
+            smdGroup.add(leftPad);
+
+            const rightPad = new THREE.Mesh(new THREE.BoxGeometry(...padSize), yellowMaterial);
+            rightPad.position.set(0.45, 0, 0);
+            smdGroup.add(rightPad);
+
+            // White terminals
+            const terminalSize = [0.2, 0.2, 0.6];
+            const whiteMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+
+            const leftTerminal = new THREE.Mesh(new THREE.BoxGeometry(...terminalSize), whiteMaterial);
+            leftTerminal.position.set(-0.3, 0.1, 0);
+            smdGroup.add(leftTerminal);
+
+            const rightTerminal = new THREE.Mesh(new THREE.BoxGeometry(...terminalSize), whiteMaterial);
+            rightTerminal.position.set(0.3, 0.1, 0);
+            smdGroup.add(rightTerminal);
+
+            // Brown body
+            const bodyGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.6);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xA0522D });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.set(0, 0.1, 0);
+            smdGroup.add(body);
+
+            // Set position, rotation, scale
+            smdGroup.position.set(x, y, z);
+            smdGroup.rotation.y = rotationY; // 🔁 Manual rotation (Y-axis)
+            smdGroup.castShadow = true;
+            smdGroup.scale.set(0.3, 0.3, 0.3); // scale down
+
+            return smdGroup;
+        }
+
+        function createSMD_Black(x, y, z, label = '', rotationY = 1.5, scale = 0.3) {
+            const smdGroup = new THREE.Group();
+
+            // Green PCB Pad
+            const padGeometry = new THREE.BoxGeometry(1.2, 0.05, 0.6);
+            const padMaterial = new THREE.MeshPhongMaterial({ color: 0x3e7d3e });
+            const pad = new THREE.Mesh(padGeometry, padMaterial);
+            pad.position.set(0, -0.075, 0);
+            smdGroup.add(pad);
+
+            // Yellow solder pads
+            const padSize = [0.3, 0.1, 0.6];
+            const yellowMaterial = new THREE.MeshPhongMaterial({ color: 0xffd700 });
+
+            const leftPad = new THREE.Mesh(new THREE.BoxGeometry(...padSize), yellowMaterial);
+            leftPad.position.set(-0.45, 0, 0);
+            smdGroup.add(leftPad);
+
+            const rightPad = new THREE.Mesh(new THREE.BoxGeometry(...padSize), yellowMaterial);
+            rightPad.position.set(0.45, 0, 0);
+            smdGroup.add(rightPad);
+
+            // White terminals
+            const terminalSize = [0.2, 0.2, 0.6];
+            const whiteMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+
+            const leftTerminal = new THREE.Mesh(new THREE.BoxGeometry(...terminalSize), whiteMaterial);
+            leftTerminal.position.set(-0.3, 0.1, 0);
+            smdGroup.add(leftTerminal);
+
+            const rightTerminal = new THREE.Mesh(new THREE.BoxGeometry(...terminalSize), whiteMaterial);
+            rightTerminal.position.set(0.3, 0.1, 0);
+            smdGroup.add(rightTerminal);
+
+            // 🔲 Black body (instead of brown)
+            const bodyGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.6);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 }); // black
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.set(0, 0.1, 0);
+            smdGroup.add(body);
+
+            // Position, rotation, scale
+            smdGroup.position.set(x, y, z);
+            smdGroup.rotation.y = rotationY;
+            smdGroup.castShadow = true;
+            smdGroup.scale.set(scale, scale, scale);
+
+            return smdGroup;
+        }
+
+        function createSMD_Black1(x, y, z, label = '', rotationY = 1.5, scale = 0.3) {
+            const smdGroup = new THREE.Group();
+
+            // Green PCB Pad
+            const padGeometry = new THREE.BoxGeometry(1.2, 0.05, 0.6);
+            const padMaterial = new THREE.MeshPhongMaterial({ color: 0x3e7d3e });
+            const pad = new THREE.Mesh(padGeometry, padMaterial);
+            pad.position.set(0, -0.075, 0);
+            smdGroup.add(pad);
+
+            // Yellow solder pads
+            const padSize = [0.3, 0.1, 0.6];
+            const yellowMaterial = new THREE.MeshPhongMaterial({ color: 0xffd700 });
+
+            const leftPad = new THREE.Mesh(new THREE.BoxGeometry(...padSize), yellowMaterial);
+            leftPad.position.set(-0.45, 0, 0);
+            smdGroup.add(leftPad);
+
+            const rightPad = new THREE.Mesh(new THREE.BoxGeometry(...padSize), yellowMaterial);
+            rightPad.position.set(0.45, 0, 0);
+            smdGroup.add(rightPad);
+
+            // White terminals
+            const terminalSize = [0.2, 0.2, 0.6];
+            const whiteMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+
+            const leftTerminal = new THREE.Mesh(new THREE.BoxGeometry(...terminalSize), whiteMaterial);
+            leftTerminal.position.set(-0.3, 0.1, 0);
+            smdGroup.add(leftTerminal);
+
+            const rightTerminal = new THREE.Mesh(new THREE.BoxGeometry(...terminalSize), whiteMaterial);
+            rightTerminal.position.set(0.3, 0.1, 0);
+            smdGroup.add(rightTerminal);
+
+            // 🔲 Black body (instead of brown)
+            const bodyGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.6);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 }); // black
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.set(0, 0.1, 0);
+            smdGroup.add(body);
+
+            // Position, rotation, scale
+            smdGroup.position.set(x, y, z);
+            smdGroup.rotation.y = rotationY;
+            smdGroup.castShadow = true;
+            smdGroup.scale.set(scale, scale, scale);
+
+            return smdGroup;
+        }
+
+        function createPinHeader(x = 0, y = 0, z = 0, scale = 0.2, rotationY = 0) {
+            const group = new THREE.Group();
+
+            // Main rectangular slot (black header)
+            const bodyGeometry = new THREE.BoxGeometry(0.4, 0.05, 5.2);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x222222 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.castShadow = true;
+            group.add(body);
+
+            // Hole style: realistic ring (torus) + inner cutout
+            const ringMaterial = new THREE.MeshPhongMaterial({ color: 0xdddddd, shininess: 100 });
+            const holeZStart = -1.5;
+
+            for (let i = 0; i < 12; i++) {
+                const zOffset = holeZStart + i * 0.4;
+
+                // Outer ring (via/pad)
+                const ring = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.06, 0.01, 8, 16),
+                    ringMaterial
+                );
+                ring.rotation.x = Math.PI / 2;
+                ring.position.set(0, 0.026, zOffset - 0.7);
+                group.add(ring);
+            }
+
+            group.position.set(x, y, z);
+            group.rotation.y = rotationY;
+            group.scale.set(scale, scale, scale);
+
+            return group;
+        }
+
+        function createPinHeader1(x = 0, y = 0, z = 0, scale = 0.2, rotationY = 0) {
+            const group = new THREE.Group();
+
+            const ringMaterial = new THREE.MeshPhongMaterial({ color: 0xdddddd, shininess: 100 });
+            const pinMaterial = new THREE.MeshPhongMaterial({ color: 0xb87333, shininess: 80 });
+
+            const holeZStart = -1.5;
+            const pinHeight = 0.1;
+            const pinRadius = 0.010;
+
+            for (let i = 0; i < 8; i++) {
+                const zOffset = holeZStart + i * 0.1 - 0.7;
+
+                // Torus ring
+                const ring = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.03, 0.01, 8, 16),
+                    ringMaterial
+                );
+                ring.rotation.x = Math.PI / 2;
+                ring.position.set(0, 0.026, zOffset);
+                group.add(ring);
+
+                // Vertical pin
+                const pin = new THREE.Mesh(
+                    new THREE.CylinderGeometry(pinRadius, pinRadius, pinHeight, 12),
+                    pinMaterial
+                );
+                pin.position.set(0, 0.096 - pinHeight / 2, zOffset);
+                group.add(pin);
+            }
+
+            group.position.set(x, y, z);
+            group.rotation.y = rotationY;
+            group.scale.set(scale, scale, scale);
+
+            return group;
+        }
+
+        function createPinHeader2(x = 0, y = 0, z = 0, scale = 0.2, rotationY = 0) {
+            const group = new THREE.Group();
+
+            const ringMaterial = new THREE.MeshPhongMaterial({ color: 0xdddddd, shininess: 100 });
+            const pinMaterial = new THREE.MeshPhongMaterial({ color: 0xb87333, shininess: 80 });
+
+            const holeZStart = -1.5;
+            const pinHeight = 0.1;
+            const pinRadius = 0.009;
+
+            for (let i = 0; i < 2; i++) {
+                const zOffset = holeZStart + i * 0.1 - 0.7;
+
+                // Torus ring
+                const ring = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.03, 0.01, 8, 16),
+                    ringMaterial
+                );
+                ring.rotation.x = Math.PI / 2;
+                ring.position.set(0, 0.026, zOffset);
+                group.add(ring);
+
+                // Vertical pin
+                const pin = new THREE.Mesh(
+                    new THREE.CylinderGeometry(pinRadius, pinRadius, pinHeight, 12),
+                    pinMaterial
+                );
+                pin.position.set(0, 0.096 - (pinHeight / 2), zOffset);
+                group.add(pin);
+            }
+
+            group.position.set(x, y, z);
+            group.rotation.y = rotationY;
+            group.scale.set(scale, scale, scale);
+
+            return group;
+        }
+
+        function createPinHeader3(x = 0, y = 0, z = 0, scale = 0.2, rotationY = 0) {
+            const group = new THREE.Group();
+
+            const ringMaterial = new THREE.MeshPhongMaterial({ color: 0xdddddd, shininess: 100 });
+            const pinMaterial = new THREE.MeshPhongMaterial({ color: 0xb87333, shininess: 80 });
+
+            const holeZStart = -1.5;
+            const pinHeight = 0.1;
+            const pinRadius = 0.010;
+
+            for (let i = 0; i < 3; i++) {
+                const zOffset = holeZStart + i * 0.2 - 0.7;
+
+                // Torus ring
+                const ring = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.05, 0.01, 8, 16),
+                    ringMaterial
+                );
+                ring.rotation.x = Math.PI / 2;
+                ring.position.set(0, 0.026, zOffset);
+                group.add(ring);
+
+                // Vertical pin
+                const pin = new THREE.Mesh(
+                    new THREE.CylinderGeometry(pinRadius, pinRadius, pinHeight, 12),
+                    pinMaterial
+                );
+                pin.position.set(0, 0.096 - pinHeight / 2, zOffset);
+                group.add(pin);
+            }
+
+            group.position.set(x, y, z);
+            group.rotation.y = rotationY;
+            group.scale.set(scale, scale, scale);
+
+            return group;
+        }
+
+        function createPinHeader4(x = 0, y = 0, z = 0, scale = 0.2, rotationY = 0) {
+            const group = new THREE.Group();
+
+            const ringMaterial = new THREE.MeshPhongMaterial({ color: 0xdddddd, shininess: 100 });
+            const pinMaterial = new THREE.MeshPhongMaterial({ color: 0xb87333, shininess: 80 });
+
+            const holeZStart = -1.5;
+            const pinHeight = 0.1;
+            const pinRadius = 0.010;
+
+            for (let i = 0; i < 4; i++) {
+                const zOffset = holeZStart + i * 0.55 - 0.7;
+
+                // Torus ring (hole pad)
+                const ring = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.05, 0.01, 8, 16),
+                    ringMaterial
+                );
+                ring.rotation.x = Math.PI / 2;
+                ring.position.set(0, 0.026, zOffset);
+                group.add(ring);
+
+                // Vertical pin
+                const pin = new THREE.Mesh(
+                    new THREE.CylinderGeometry(pinRadius, pinRadius, pinHeight, 12),
+                    pinMaterial
+                );
+                pin.position.set(0, 0.096 - pinHeight / 2, zOffset);
+                group.add(pin);
+            }
+
+            group.position.set(x, y, z);
+            group.rotation.y = rotationY;
+            group.scale.set(scale, scale, scale);
+
+            return group;
+        }
+
+        function createScrewTerminal(x = 0, y = 0, z = 0, scale = 0.25, rotationY = 0) {
+            const group = new THREE.Group();
+
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x004080, shininess: 30 });
+            const pinMaterial = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, shininess: 100 });
+            const screwMaterial = new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 120 });
+
+            // Longer housing along X-axis
+            const housing = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.14, 0.12), bodyMaterial);
+            housing.position.set(0, 0.07, 0);
+            group.add(housing);
+
+            // === Top Screws (unchanged positions) ===
+            for (let i = 0; i < 2; i++) {
+                const screwGroup = new THREE.Group();
+
+                const screw = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.018, 0.018, 0.004, 32),
+                    screwMaterial
+                );
+                screw.rotation.x = Math.PI;
+                screwGroup.add(screw);
+
+                const slotMaterial = new THREE.MeshPhongMaterial({ color: 0x222222 });
+                const slot1 = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.025, 0.002, 0.001),
+                    slotMaterial
+                );
+                const slot2 = slot1.clone();
+                slot2.rotation.y = Math.PI / 2;
+                [slot1, slot2].forEach(slot => {
+                    slot.position.set(0, 0.002, 0);
+                    screwGroup.add(slot);
+                });
+
+                screwGroup.position.set(-0.04 + i * 0.08, 0.140, 0.01);
+                group.add(screwGroup);
+            }
+
+            // === Front & Back Pin Holes (3 sets) ===
+            for (let side of [-1, 1]) {
+                for (let i = 0; i < 2; i++) {
+                    const hole = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.014, 0.014, 0.006, 32),
+                        new THREE.MeshPhongMaterial({ color: 0x222222 })
+                    );
+                    hole.rotation.x = Math.PI / 2;
+                    hole.position.set(-0.04 + i * 0.10, 0.07, side * 0.058);
+                    group.add(hole);
+                }
+            }
+
+            // === Bottom Pins (3) ===
+            for (let i = 0; i < 2; i++) {
+                const pin = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.007, 0.007, 0.5, 12),
+                    pinMaterial
+                );
+                pin.position.set(-0.04 + i * 0.10, -0.1, 0);
+                group.add(pin);
+            }
+
+            group.position.set(x, y, z);
+            group.rotation.y = rotationY;
+            group.scale.set(scale, scale, scale);
+
+            return group;
+        }
+
+        function createManualTrace({
+            position = { x: 0, y: 0.11, z: 0 },
+            size = { x: 2, y: 0.01, z: 0.05 },
+            rotation = { x: 0, y: 0, z: 0 },
+            color = 0xff8c00
+        }) {
+            const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+            const material = new THREE.MeshPhongMaterial({ color, shininess: 50 });
+            const trace = new THREE.Mesh(geometry, material);
+
+            trace.position.set(position.x, position.y, position.z);
+            trace.rotation.set(rotation.x, rotation.y, rotation.z);
+
+            trace.castShadow = false;
+            trace.receiveShadow = true;
+
+            return trace;
+        }
+
+        function createPCBLabel({
+            text = "Label",
+            position = { x: 0, y: 0.101, z: 0 },
+            rotation = { x: -Math.PI / 2, y: 0, z: 0 },
+            size = { width: 1.5, height: 0.4 },
+            fontSize = 48
+        }) {
+            const canvas = document.createElement("canvas");
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext("2d");
+
+            // Transparent background
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#ffffff"; // white text
+            ctx.font = `bold ${fontSize}px Arial`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+
+            const material = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+
+            
+
+            const geometry = new THREE.PlaneGeometry(size.width, size.height);
+            const labelMesh = new THREE.Mesh(geometry, material);
+
+            labelMesh.position.set(position.x, position.y, position.z);
+            labelMesh.rotation.set(rotation.x, rotation.y, rotation.z);
+            labelMesh.renderOrder = 2;
+
+            return labelMesh;
+        }
+
+
+        function createCapacitorCircle(x = 0, y = 0.1, z = 0, radius = 0.9, height = 0.04, rotationY = 0) {
+        const group = new THREE.Group();
+
+        
+
+        // Half white top (semicircle texture)
+        const canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const topMaterial = new THREE.MeshPhongMaterial({ map: texture });
+
+        const topCircle = new THREE.Mesh(
+            new THREE.CircleGeometry(radius, 64),
+            topMaterial
+        );
+        topCircle.rotation.x = -Math.PI / 2;
+        topCircle.position.y = height / 2 + 0.001;
+        group.add(topCircle);
+
+        // Center hole (metal ring)
+        const hole = new THREE.Mesh(
+            new THREE.TorusGeometry(0.05, 0.01, 8, 16),
+            new THREE.MeshPhongMaterial({ color: 0xdddddd })
+        );
+        hole.rotation.x = Math.PI / 2;
+        hole.position.y = height / 2 + 0.002;
+        group.add(hole);
+
+        group.position.set(x, y, z);
+        group.rotation.y = rotationY;
+        group.castShadow = true;
+
+        return group;
+    }
+
+function createElectrolyticCapacitor(x = 0, y = 0.11, z = 0, radius = 0.3, height = 0.8) {
+    const group = new THREE.Group();
+
+    // Body (black cylinder)
+    const bodyGeometry = new THREE.CylinderGeometry(radius, radius, height, 64);
+    const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x000000 });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.castShadow = true;
+    group.add(body);
+
+    // Top (metallic cap with a cross)
+    const capGeometry = new THREE.CircleGeometry(radius, 64);
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ccc';
+    ctx.beginPath();
+    ctx.arc(64, 64, 60, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(20, 64); ctx.lineTo(108, 64); ctx.stroke(); // horizontal
+    ctx.beginPath(); ctx.moveTo(64, 20); ctx.lineTo(64, 108); ctx.stroke(); // vertical
+
+    const topTexture = new THREE.CanvasTexture(canvas);
+    const topMaterial = new THREE.MeshPhongMaterial({ map: topTexture });
+
+    const top = new THREE.Mesh(capGeometry, topMaterial);
+    top.rotation.x = -Math.PI / 2;
+    top.position.y = height / 2 + 0.001;
+    group.add(top);
+
+    // Negative stripe (gray)
+    const stripeGeometry = new THREE.PlaneGeometry(height, height * 0.9);
+    
+    const stripeCanvas = document.createElement('canvas');
+    stripeCanvas.width = 64;
+    stripeCanvas.height = 256;
+    
+
+    const sctx = stripeCanvas.getContext('2d');
+    sctx.fillStyle = '#ccc';
+    sctx.fillRect(20, 0, 24, 256);
+    sctx.fillStyle = '#000';
+    
+    for (let i = 40; i < 220; i += 40) {
+        sctx.beginPath();
+        sctx.arc(32, i, 6, 0, 2 * Math.PI);
+        sctx.stroke();
+    }
+
+    const stripeTexture = new THREE.CanvasTexture(stripeCanvas);
+    const stripeMaterial = new THREE.MeshBasicMaterial({
+        map: stripeTexture,
+        side: THREE.DoubleSide,
+        transparent: true
+    });
+
+    const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+    stripe.rotation.y = Math.PI / 2;
+    stripe.position.set(radius, 0, 0);
+    group.add(stripe);
+
+    // Pins (legs)
+    const pinMaterial = new THREE.MeshPhongMaterial({ color: 0x777777 });
+    for (let dx of [-0.05, 0.05]) {
+        const pin = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.01, 0.01, 0.4, 8),
+            pinMaterial
+        );
+        pin.position.set(dx, -height / 2 - 0.2, 0);
+        group.add(pin);
+    }
+
+    group.position.set(x, y + height +0.2, z);
+    group.scale.set(1.9,1.9,1.9)
+    return group;
+}
+
+
+
+    
+
+
+        // Define trace paths for continuous current flow in sequence
+        const tracePaths = [
+            // trace2: vertical
+            {
+                start: { x: -1.68, y: 0.15, z: -4.9 },
+                end: { x: -1.68, y: 0.15, z: -4.8 },
+                length: 0.1
+            },
+            // trace3: vertical
+            {
+                start: { x: -1.68, y: 0.15, z: -4.71 },
+                end: { x: -1.68, y: 0.15, z: -3.88 },
+                length: 0.83
+            },
+            // trace1: horizontal
+            {
+                end: { x: -2.326, y: 0.15, z: -3.91 },
+                start: { x: -1.672, y: 0.15, z: -3.91 },
+                length: 0.654
+            },
+            // trace4: vertical
+            {
+                start: { x: -2.33, y: 0.15, z: -3.93 },
+                end: { x: -2.33, y: 0.15, z: -3.4 },
+                length: 0.53
+            },
+            // trace5: vertical
+            {
+                start: { x: -2.33, y: 0.15, z: -2.55 },
+                end: { x: -2.33, y: 0.15, z: -1.85 },
+                length: 0.7
+            },
+            // trace6: vertical
+            {
+                start: { x: -2.33, y: 0.15, z: -1.68 },
+                end: { x: -2.33, y: 0.15, z: -0.78 },
+                length: 0.9
+            },
+            // trace7: horizontal
+            {
+                end: { x: -2.48, y: 0.15, z: -0.76 },
+                start: { x: -2.31, y: 0.15, z: -0.76 },
+                length: 0.17
+            },
+            // trace8: vertical
+            {
+                start: { x: -2.46, y: 0.15, z: -0.76 },
+                end: { x: -2.46, y: 0.15, z: 0.04 },
+                length: 0.8
+            },
+            // trace9: vertical
+            {
+                start: { x: -1.44, y: 0.15, z: 1.7 },
+                end: { x: -1.44, y: 0.15, z: 2.5 },
+                length: 0.8
+            },
+            // trace10: horizontal
+            {
+                end: { x: -1.84, y: 0.15, z: 2.51 },
+                start: { x: -1.42, y: 0.15, z: 2.51 },
+                length: 0.42
+            },
+            // trace11: vertical
+            {
+                start: { x: -1.85, y: 0.15, z: 2.48 },
+                end: { x: -1.85, y: 0.15, z: 5.32 },
+                length: 2.84
+            }
+        ];
+
+        // Calculate total path length
+        const totalPathLength = tracePaths.reduce((sum, path) => sum + path.length, 0);
+        const dotSpacing = totalPathLength / totalDotCount;
+
+        function createMovingDot() {
+            // Create the main dot - optimized for continuous flow
+            const dotGeometry = new THREE.SphereGeometry(0.025, 12, 12);
+            const dotMaterial = new THREE.MeshPhongMaterial({
+                color: 0xff0000,
+                emissive: 0x660000,
+                shininess: 100
+            });
+            
+            const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+            dot.castShadow = true;
+            
+            // Add glow effect
+            const glowGeometry = new THREE.SphereGeometry(0.04, 12, 12);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff4444,
+                transparent: true,
+                opacity: 0.5
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            
+            const dotGroup = new THREE.Group();
+            dotGroup.add(dot);
+            dotGroup.add(glow);
+            
+            return dotGroup;
+        }
+
+        function getPositionAtDistance(totalDistance) {
+            // Wrap distance to stay within path bounds
+            let distance = ((totalDistance % totalPathLength) + totalPathLength) % totalPathLength;
+            
+            // Find which path segment this distance falls on
+            let currentDistance = 0;
+            for (let i = 0; i < tracePaths.length; i++) {
+                const path = tracePaths[i];
+                if (distance <= currentDistance + path.length) {
+                    // Calculate position within this path segment
+                    const localDistance = distance - currentDistance;
+                    const progress = localDistance / path.length;
+                    
+                    return {
+                        x: path.start.x + (path.end.x - path.start.x) * progress,
+                        y: path.start.y + (path.end.y - path.start.y) * progress,
+                        z: path.start.z + (path.end.z - path.start.z) * progress
+                    };
+                }
+                currentDistance += path.length;
+            }
+            
+            // Fallback to start of first path
+            return { ...tracePaths[0].start };
+        }
+
+        function initCurrentFlowAnimation() {
+            // Create all dots for continuous flow
+            for (let i = 0; i < totalDotCount; i++) {
+                const dot = createMovingDot();
+                pcbGroup.add(dot);
+                currentDots.push(dot);
+            }
+        }
+
+        function updateCurrentFlow(deltaTime) {
+            if (!currentFlowActive) {
+                // Hide all dots when flow is off
+                currentDots.forEach(dot => {
+                    dot.visible = false;
+                });
+                return;
+            }
+
+            // Update global offset for continuous movement
+            const flowSpeed = currentSpeed * 0.5; // Slower speed
+            globalOffset += deltaTime * flowSpeed;
+
+            // Update each dot position
+            currentDots.forEach((dot, index) => {
+                // Calculate this dot's position along the total path
+                const dotDistance = globalOffset + (index * dotSpacing);
+                const position = getPositionAtDistance(dotDistance);
+                
+                // Set dot position
+                dot.position.set(position.x, position.y, position.z);
+                
+                // Add subtle animation effects
+                const time = Date.now() * 0.001;
+                const bounce = Math.sin(time * 4 + index * 0.5) * 0.008;
+                dot.position.y += bounce;
+                
+                // Pulsing scale effect
+                const pulse = 1 + Math.sin(time * 6 + index * 0.3) * 0.2;
+                dot.scale.setScalar(pulse);
+                
+                // Dynamic glow intensity
+                const intensity = 0.4 + Math.sin(time * 3 + index * 0.7) * 0.3;
+                if (dot.children[0]) {
+                    dot.children[0].material.emissive.setRGB(intensity, 0, 0);
+                }
+                
+                // Show dot
+                dot.visible = true;
+            });
+        }
+
+        // Control functions
+        function toggleCurrentFlow() {
+            currentFlowActive = !currentFlowActive;
+            
+            // Hide/show all dots
+            currentDots.forEach(dot => {
+                dot.visible = currentFlowActive;
+            });
+        }
+
+        function increaseCurrentSpeed() {
+            currentSpeed = Math.min(currentSpeed + 0.2, 3.0);
+            document.getElementById('speedDisplay').textContent = currentSpeed.toFixed(1) + 'x';
+        }
+
+        function decreaseCurrentSpeed() {
+            currentSpeed = Math.max(currentSpeed - 0.2, 0.2);
+            document.getElementById('speedDisplay').textContent = currentSpeed.toFixed(1) + 'x';
+        }
+
+        // Auto-rotation (slideshow) variables
+        let autoRotate = false;
+        let autoRotateTimer = 0;
+        let autoRotateIndex = 0;
+        const autoRotateAngles = [
+            { x: -0.04, y: -1.81, z: 0 }, // default
+            { x: 0.1, y: 0, z: 0 },
+            { x: 0, y: Math.PI / 2, z: 0 },
+            { x: -0.2, y: Math.PI, z: 0 },
+            { x: 0.2, y: -Math.PI / 2, z: 0 }
+        ];
+
+        function toggleAutoRotate() {
+            autoRotate = !autoRotate;
+            document.getElementById('autoRotateBtn').textContent = autoRotate ? 'Stop Slideshow' : 'Start Slideshow';
+            autoRotateTimer = 0;
+            autoRotateIndex = 0;
+        }
+
+        // Add components to PCB
+        const components = [
+            createIC(-2.5, 0.4, -3, Math.PI / 2, 'U8'),
+            createIC(0, 0.5, -3, Math.PI / 2, 'U9'),
+            createIC(2.5, 0.5, -3, Math.PI / 2, 'U11'),
+
+            createIC1(-1.7, 0.01, 0.8, Math.PI / 2, 'IPM2'),
+            createIC1(2, 0.01, 0.8, Math.PI / 2, 'IPM1'),
+
+            createIC2(-1.4, 0.32, 4.2, Math.PI, 'U13'),
+
+            createSMD(-1.5, 0.15, -2.8, 'C1'),
+            createSMD(-1.5, 0.15, -3.3, 'R2'),
+            createSMD(1, 0.15, -2.8, 'C2'),
+            createSMD(1, 0.15, -3.3, 'R2'),
+            createSMD(3.4, 0.15, -2.8, 'C3'),
+            createSMD(3.4, 0.15, -3.3, 'R3'),
+
+            createSMD_Black(-1.68, 0.15, -4.7, 'R1', Math.PI / 2, 0.2),
+            createSMD_Black(-1.35, 0.15, -4.7, 'R2', Math.PI / 2, 0.2),
+            createSMD_Black(-0.999, 0.15, -4.7, 'R3', Math.PI / 2, 0.2),
+            createSMD_Black(-0.70, 0.15, -4.7, 'R4', Math.PI / 2, 0.2),
+            createSMD_Black(-0.40, 0.15, -4.7, 'R5', Math.PI / 2, 0.2),
+            createSMD_Black(-0.05, 0.15, -4.7, 'R6', Math.PI / 2, 0.2),
+            createSMD_Black(0.30, 0.15, -4.7, 'R7', Math.PI / 2, 0.2),
+            createSMD_Black(0.60, 0.15, -4.7, 'R8', Math.PI / 2, 0.2),
+            createSMD_Black(0.95, 0.15, -4.7, 'R9', Math.PI / 2, 0.2),
+            createSMD_Black(1.25, 0.15, -4.7, 'R10', Math.PI / 2, 0.2),
+            createSMD_Black(1.6, 0.15, -4.7, 'R11', Math.PI / 2, 0.2),
+            createSMD_Black(1.9, 0.15, -4.7, 'R12', Math.PI / 2, 0.2),
+
+            createSMD_Black1(-2, 0.15, -1.8, 'R12', Math.PI / 2, 0.2),
+            createSMD_Black1(-2.33, 0.15, -1.8, 'R12', Math.PI / 2, 0.2),
+
+            createPinHeader(-0.25, 0.12, -5.2, 0.8, Math.PI / 2)
+        ];
+
+        components.forEach(component => {
+            pcbGroup.add(component);
+        });
+
+        pcbGroup.add(createCapacitorCircle(-5.5, 0.11, -2.5));
+        pcbGroup.add(createCapacitorCircle(-5.5, 0.11, -0.1));
+        pcbGroup.add(createCapacitorCircle(-8.5, 0.11, -3.5));
+        pcbGroup.add(createCapacitorCircle(-8.5, 0.11, -0.8));
+
+       pcbGroup.add(createElectrolyticCapacitor(-5.5, 0.11,  -2.5));
+       pcbGroup.add(createElectrolyticCapacitor(-5.5, 0.11,  -0.1));
+       pcbGroup.add(createElectrolyticCapacitor(-8.5, 0.11,  -3.5));
+       pcbGroup.add(createElectrolyticCapacitor(-8.5, 0.11,  -0.8));
+
+
+
+        // Create traces (keep them orange - the dot will show the current flow)
+        const traces = [
+            createManualTrace({
+                position: { x: -1.999, y: 0.11, z: -3.91 },
+                size: { x: 0.654, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: 0, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -1.68, y: 0.11, z: -4.9 },
+                size: { x: 0.2, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: Math.PI / 2, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -1.68, y: 0.11, z: -4.3 },
+                size: { x: 0.83, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: Math.PI / 2, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -2.33, y: 0.11, z: -3.67 },
+                size: { x: 0.53, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: Math.PI / 2, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -2.33, y: 0.11, z: -2.2 },
+                size: { x: 0.7, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: Math.PI / 2, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -2.33, y: 0.11, z: -1.23 },
+                size: { x: 0.9, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: Math.PI / 2, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -2.397, y: 0.11, z: -0.76 },
+                size: { x: 0.18, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: 0, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -2.46, y: 0.11, z: -0.36 },
+                size: { x: 0.8, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: Math.PI / 2, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -1.44, y: 0.11, z: 2.1 },
+                size: { x: 0.8, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: Math.PI / 2, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -1.63, y: 0.11, z: 2.51 },
+                size: { x: 0.43, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: 0, z: 0 }
+            }),
+            createManualTrace({
+                position: { x: -1.85, y: 0.11, z: 3.9 },
+                size: { x: 2.83, y: 0.01, z: 0.05 },
+                rotation: { x: 0, y: Math.PI / 2, z: 0 }
+            })
+        ];
+
+        traces.forEach(trace => {
+            pcbGroup.add(trace);
+        });
+
+        scene.add(pcbGroup);
+
+        // Add PCB labels
+        const labels = [
+            { text: "2HU", pos: { x: -1.99, y: 0.101, z: -5.42 } },
+            { text: "2HV", pos: { x: -1.70, y: 0.101, z: -5.42 } },
+            { text: "2HW", pos: { x: -1.36, y: 0.101, z: -5.42 } },
+            { text: "2LU", pos: { x: -1.05, y: 0.101, z: -5.42 } },
+            { text: "2LV", pos: { x: -0.72, y: 0.101, z: -5.42 } },
+            { text: "2LW", pos: { x: -0.40, y: 0.101, z: -5.42 } },
+            { text: "1HU", pos: { x: -0.08, y: 0.101, z: -5.42 } },
+            { text: "1HV", pos: { x: 0.25, y: 0.101, z: -5.42 } },
+            { text: "1HW", pos: { x: 0.55, y: 0.101, z: -5.42 } },
+            { text: "1LU", pos: { x: 0.88, y: 0.101, z: -5.42 } },
+            { text: "1LV", pos: { x: 1.20, y: 0.101, z: -5.42 } },
+            { text: "1LW", pos: { x: 1.5, y: 0.101, z: -5.42 } }
+        ];
+
+        labels.forEach(labelData => {
+            pcbGroup.add(createPCBLabel({
+                text: labelData.text,
+                position: labelData.pos,
+                rotation: { x: -Math.PI / 2, y: 0, z: Math.PI / 2 },
+                size: { width: 0.6, height: 0.5 },
+                fontSize: 50
+            }));
+
+            pcbGroup.add(createPCBLabel({
+                text: "V2",
+                position: { x: -2.6, y: 0.101, z: 5.45 }, // front-left
+                rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+                size: { width: 1, height: 0.3 }
+            }));
+            pcbGroup.add(createPCBLabel({
+                text: "W2",
+                position: { x: -2.35, y: 0.101, z: 5.45 }, // front-left
+                rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+                size: { width: 1, height: 0.3 }
+            }));
+
+
+            pcbGroup.add(createPCBLabel({
+                text: "V2",
+                position: { x: -1.9, y: 0.101, z: 5.45 }, // front-left
+                rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+                size: { width: 1, height: 0.3 }
+            }));
+            pcbGroup.add(createPCBLabel({
+                text: "U2",
+                position: { x: -1.65, y: 0.101, z: 5.45 }, // front-left
+                rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+                size: { width: 1, height: 0.3 }
+            }));
+            pcbGroup.add(createPCBLabel({
+                text: "V1",
+                position: { x: 0.01, y: 0.101, z: 5.45 }, // front-left
+                rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+                size: { width: 1, height: 0.3 }
+            }));
+            pcbGroup.add(createPCBLabel({
+                text: "W1",
+                position: { x: 0.2, y: 0.101, z: 5.45 }, // front-left
+                rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+                size: { width: 1, height: 0.3 }
+            }));
+
+            pcbGroup.add(createPCBLabel({
+                text: "U1",
+                position: { x: 0.8, y: 0.101, z: 5.45 }, // front-left
+                rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+                size: { width: 1, height: 0.3 }
+            }));
+            pcbGroup.add(createPCBLabel({
+                text: "V1",
+                position: { x: 1, y: 0.101, z: 5.45 }, // front-left
+                rotation: { x: -Math.PI / 2, y: 0, z: 0 },
+                size: { width: 1, height: 0.3 }
+            }));
+        });
+
+        // Add pin headers
+        const pinHeaders = [
+            { func: createPinHeader1, pos: [4.3, 0.074, -0.01, 0.8, Math.PI / 2] },
+            { func: createPinHeader1, pos: [0.6, 0.074, -0.01, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [4, 0.074, -0.01, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [3.7, 0.084, 0.13, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [3.4, 0.074, -0.01, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [3.1, 0.084, 0.13, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [2.8, 0.074, -0.01, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [0.2, 0.074, -0.01, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [-0.1, 0.084, 0.13, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [-0.4, 0.074, -0.01, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [-0.7, 0.084, 0.13, 0.8, Math.PI / 2] },
+            { func: createPinHeader2, pos: [-1.0, 0.074, -0.01, 0.8, Math.PI / 2] },
+            { func: createPinHeader3, pos: [0.8, 0.074, 1.65, 0.8, Math.PI / 2] },
+            { func: createPinHeader3, pos: [4.5, 0.074, 1.65, 0.8, Math.PI / 2] },
+            { func: createPinHeader4, pos: [2.7, 0.074, 1.65, 0.8, Math.PI / 2] },
+            { func: createPinHeader4, pos: [-1, 0.074, 1.65, 0.8, Math.PI / 2] }
+        ];
+
+        pinHeaders.forEach(header => {
+            pcbGroup.add(header.func(...header.pos));
+        });
+
+        pcbGroup.add(createScrewTerminal(-1.8, 0.099, 5.3, 1, Math.PI));
+        pcbGroup.add(createScrewTerminal(-2.5, 0.099, 5.3, 1, Math.PI));
+        pcbGroup.add(createScrewTerminal(0.1, 0.099, 5.3, 1, Math.PI));
+        pcbGroup.add(createScrewTerminal(0.9, 0.099, 5.3, 1, Math.PI));
+
+        // === Animated Arrows for Pin Headers ===
+        const arrowTargets = [
+            { label: "2HU", pos: { x: -1.68, y: 0.101, z: -5.42 } },
+            { label: "2HV", pos: { x: -1.34, y: 0.101, z: -5.42 } },
+            { label: "2HW", pos: { x: -0.999, y: 0.101, z: -5.42 } },
+            { label: "2LU", pos: { x: -0.70, y: 0.101, z: -5.42 } }
+        ];
+        const arrowMeshes = [];
+        arrowTargets.forEach(target => {
+            // Arrow shaft
+            const shaftGeometry = new THREE.CylinderGeometry(0.025, 0.025, 0.18, 12);
+            const shaftMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
+            shaft.position.set(0, -0.22, -0.2);
+            // Arrow head
+            const headGeometry = new THREE.ConeGeometry(0.06, 0.12, 16);
+            const headMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.set(0, -0.1, -0.2);
+            // Group
+            const arrowGroup = new THREE.Group();
+            arrowGroup.add(shaft);
+            arrowGroup.add(head);
+            // Position so arrow head tip is just above the top of the hole
+            arrowGroup.position.set(target.pos.x, target.pos.y - 0.01 - 0.3, target.pos.z);
+            arrowGroup.rotation.x = -Math.PI; // point downwards
+            pcbGroup.add(arrowGroup);
+            arrowMeshes.push(arrowGroup);
+        });
+
+        // Initialize current flow animation
+        initCurrentFlowAnimation();
+
+        // Camera position
+        camera.position.set(5.73, 3.82, 5.73);
+        camera.lookAt(0, 0, 0);
+        pcbGroup.rotation.set(-0.04, -1.81, 0);
+
+        // Mouse and Touch controls
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetRotationX = 0;
+        let targetRotationY = 0;
+        let mouseDown = false;
+
+        // Track pinch-to-zoom
+        let initialPinchDistance = 0;
+        let isPinching = false;
+
+        // Mouse events
+        document.addEventListener('mousedown', (event) => {
+            if (autoRotate) return; // Disable manual while auto-rotating
+            mouseDown = true;
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (autoRotate) return;
+            mouseDown = false;
+        });
+
+        document.addEventListener('mousemove', (event) => {
+            if (autoRotate) return;
+            if (mouseDown) {
+                const deltaX = event.clientX - mouseX;
+                const deltaY = event.clientY - mouseY;
+
+                targetRotationY += deltaX * 0.01;
+                targetRotationX += deltaY * 0.01;
+
+                mouseX = event.clientX;
+                mouseY = event.clientY;
+            }
+        });
+
+        // Touch events for mobile
+        document.addEventListener('touchstart', (event) => {
+            if (autoRotate) return;
+
+            if (event.touches.length === 1) {
+                // Single touch - rotation
+                mouseDown = true;
+                mouseX = event.touches[0].clientX;
+                mouseY = event.touches[0].clientY;
+            } else if (event.touches.length === 2) {
+                // Two finger touch - pinch to zoom
+                isPinching = true;
+                mouseDown = false;
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (event) => {
+            if (autoRotate) return;
+            event.preventDefault();
+
+            if (isPinching && event.touches.length === 2) {
+                // Handle pinch zoom
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (initialPinchDistance > 0) {
+                    const scale = distance / initialPinchDistance;
+                    camera.position.multiplyScalar(2 - scale);
+                    initialPinchDistance = distance;
+                }
+            } else if (mouseDown && event.touches.length === 1) {
+                // Handle rotation
+                const touch = event.touches[0];
+                const deltaX = touch.clientX - mouseX;
+                const deltaY = touch.clientY - mouseY;
+
+                targetRotationY += deltaX * 0.01;
+                targetRotationX += deltaY * 0.01;
+
+                mouseX = touch.clientX;
+                mouseY = touch.clientY;
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', (event) => {
+            if (autoRotate) return;
+
+            if (event.touches.length === 0) {
+                mouseDown = false;
+                isPinching = false;
+                initialPinchDistance = 0;
+            } else if (event.touches.length === 1) {
+                // Switched from pinch to single touch
+                isPinching = false;
+                mouseDown = true;
+                mouseX = event.touches[0].clientX;
+                mouseY = event.touches[0].clientY;
+            }
+        });
+
+        // Zoom with mouse wheel
+        document.addEventListener('wheel', (event) => {
+            camera.position.multiplyScalar(1 + event.deltaY * 0.001);
+        });
+
+        // Animation loop
+        renderer.setAnimationLoop(() => {
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            // PCB rotation when dragging mouse
+            if (!autoRotate && mouseDown) {
+                pcbGroup.rotation.y += (targetRotationY - pcbGroup.rotation.y) * 0.1;
+                pcbGroup.rotation.x += (targetRotationX - pcbGroup.rotation.x) * 0.1;
+            }
+
+            // Auto-rotation (slideshow)
+            if (autoRotate) {
+                autoRotateTimer += delta;
+                if (autoRotateTimer > 3) { // Change angle every 3 seconds
+                    autoRotateIndex = (autoRotateIndex + 1) % autoRotateAngles.length;
+                    autoRotateTimer = 0;
+                }
+                // Smoothly interpolate to the target angle
+                const target = autoRotateAngles[autoRotateIndex];
+                pcbGroup.rotation.x += (target.x - pcbGroup.rotation.x) * 0.05;
+                pcbGroup.rotation.y += (target.y - pcbGroup.rotation.y) * 0.05;
+                pcbGroup.rotation.z += (target.z - pcbGroup.rotation.z) * 0.05;
+                // Also update targetRotationX/Y so manual resumes from current
+                targetRotationX = pcbGroup.rotation.x;
+                targetRotationY = pcbGroup.rotation.y;
+            }
+
+            // Update continuous current flow animation
+            updateCurrentFlow(delta);
+
+            // Update camera position in the UI
+            const pos = camera.position;
+            document.getElementById('camPos').textContent =
+                `x: ${pos.x.toFixed(2)}, y: ${pos.y.toFixed(2)}, z: ${pos.z.toFixed(2)}`;
+
+            document.getElementById('camPos1').textContent =
+                `x: ${pcbGroup.rotation.x.toFixed(2)}, y: ${pcbGroup.rotation.y.toFixed(2)}, z: ${pcbGroup.rotation.z.toFixed(2)}`;
+
+            // Animate LED glow
+            const time = Date.now() * 0.001;
+            pointLight.intensity = 0.5 + Math.sin(time * 2) * 0.3;
+
+            // Animate arrows (up and down motion)
+            arrowMeshes.forEach((arrow, i) => {
+                arrow.position.y = arrowTargets[i].pos.y + 0.08 + Math.sin(time * 2 + i) * 0.07;
+            });
+
+            // Render scene
+            renderer.render(scene, camera);
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

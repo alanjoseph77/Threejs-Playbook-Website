@@ -1,0 +1,332 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relax Lounger 3D Model</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            font-family: 'Segoe UI', sans-serif;
+            color: #444;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: sans-serif;
+            font-size: 24px;
+            color: #555;
+            background: rgba(255,255,255,0.8);
+            padding: 20px;
+            border-radius: 10px;
+        }
+    </style>
+    <!-- Import Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="info">
+        <h2>Relax Liege</h2>
+        
+    </div>
+    <div id="loading">Carpentry in progress...</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuration ---
+        const SCALE = 0.1; // Scale down
+        
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf5f5f5);
+        scene.fog = new THREE.Fog(0xf5f5f5, 10, 50);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(15, 10, 15);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(5, 2, 0);
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        mainLight.position.set(5, 10, 5);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        scene.add(mainLight);
+
+        const fillLight = new THREE.DirectionalLight(0xffeedd, 0.5);
+        fillLight.position.set(-5, 5, -5);
+        scene.add(fillLight);
+
+        // --- Procedural Wood Texture ---
+        function createWoodTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Base: Warm Medium Brown
+            ctx.fillStyle = '#c19a6b'; 
+            ctx.fillRect(0, 0, 512, 512);
+
+            // Grain Lines
+            ctx.globalAlpha = 0.15;
+            ctx.strokeStyle = '#5d4037';
+            
+            for(let i=0; i<80; i++) {
+                ctx.lineWidth = 1 + Math.random() * 2;
+                ctx.beginPath();
+                // Horizontal grain for panels
+                let y = i * 8 + Math.random() * 5;
+                ctx.moveTo(0, y);
+                for(let x=0; x<=512; x+=20) {
+                    y += Math.sin(x * 0.01 + i) * 3 + (Math.random()-0.5);
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            // Fine Noise
+            ctx.globalAlpha = 0.05;
+            for(let i=0; i<20000; i++) {
+                const x = Math.random() * 512;
+                const y = Math.random() * 512;
+                ctx.fillStyle = Math.random() > 0.5 ? '#3e2723' : '#d7ccc8';
+                ctx.fillRect(x,y,1,1);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+
+        const woodTexture = createWoodTexture();
+        const woodMat = new THREE.MeshStandardMaterial({
+            map: woodTexture,
+            color: 0xffffff,
+            roughness: 0.6,
+            metalness: 0.0,
+            bumpMap: woodTexture,
+            bumpScale: 0.01
+        });
+
+        // --- Geometry Construction ---
+
+        function createLounger() {
+            const group = new THREE.Group();
+
+            // Dimensions (Approximate based on image)
+            // Length: 20 units (approx 2m)
+            // Width: 6 units (approx 60cm)
+            
+            // --- 1. Define the Curves ---
+            
+            // Top Curve: The ergonomic wave
+            // Start (Head): (0, 6)
+            // Dip (Seat): (8, 2)
+            // Peak (Knees): (14, 4)
+            // End (Feet): (20, 3)
+            const topCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(0, 7, 0),    // Head Top
+                new THREE.Vector3(2, 6, 0),    // Neck
+                new THREE.Vector3(7, 2.5, 0),  // Seat Bottom
+                new THREE.Vector3(13, 4.5, 0), // Knee Peak
+                new THREE.Vector3(20, 2.5, 0)  // Feet
+            ]);
+
+            // Bottom Curve: Gentle Rocker Arc
+            // Start: (0, 0)
+            // End: (20, 0)
+            // Middle dip slightly? Or convex rocker?
+            // Image shows it's a rocker. So middle is lower than ends? 
+            // Actually, image shows ends are slightly higher, creating a curved bottom.
+            const bottomCurve = new THREE.QuadraticBezierCurve3(
+                new THREE.Vector3(0, 0.5, 0),
+                new THREE.Vector3(10, -1.5, 0), // Rocker bottom point
+                new THREE.Vector3(20, 0.5, 0)
+            );
+
+            // --- 2. Create Side Panels ---
+            
+            const shape = new THREE.Shape();
+            const res = 50; // Resolution for curve sampling
+
+            // Draw Top Edge
+            const topPoints = topCurve.getPoints(res);
+            shape.moveTo(topPoints[0].x, topPoints[0].y);
+            for(let i=1; i<topPoints.length; i++) {
+                shape.lineTo(topPoints[i].x, topPoints[i].y);
+            }
+
+            // Draw Right Edge
+            shape.lineTo(20, 0.5); // Connect to bottom curve end
+
+            // Draw Bottom Edge (Backwards)
+            const bottomPoints = bottomCurve.getPoints(res);
+            for(let i=bottomPoints.length-1; i>=0; i--) {
+                shape.lineTo(bottomPoints[i].x, bottomPoints[i].y);
+            }
+
+            // Close Shape (Left Edge)
+            shape.lineTo(0, 7); // Back to start
+
+            const panelSettings = {
+                steps: 1,
+                depth: 0.4, // 4cm thickness
+                bevelEnabled: true,
+                bevelThickness: 0.05,
+                bevelSize: 0.05,
+                bevelSegments: 3
+            };
+
+            const panelGeo = new THREE.ExtrudeGeometry(shape, panelSettings);
+            
+            // Create Left Panel
+            const panelL = new THREE.Mesh(panelGeo, woodMat);
+            panelL.position.z = -3; // Half width
+            panelL.castShadow = true;
+            panelL.receiveShadow = true;
+            group.add(panelL);
+
+            // Create Right Panel
+            const panelR = new THREE.Mesh(panelGeo, woodMat);
+            panelR.position.z = 3 - 0.4; // Half width - thickness
+            panelR.castShadow = true;
+            panelR.receiveShadow = true;
+            group.add(panelR);
+
+            // --- 3. Create Slats (Leiste) ---
+            // "20" Slats along the top curve
+            
+            const slatCount = 20;
+            const slatWidth = 6.4; // Spanning both panels + overhang? Or flush? Usually flush or slight overhang. 
+                                   // Panels are at -3 to +3 (width 6). Let's make slat width 6.4.
+            const slatDepth = 0.6; // Length along curve (6cm)
+            const slatThick = 0.2; // Thickness (2cm)
+            
+            const slatGeo = new THREE.BoxGeometry(slatDepth, slatThick, slatWidth);
+            
+            for(let i=0; i<slatCount; i++) {
+                // Distribute t from start to end. 
+                // Maybe skip the very very edges to avoid overhang weirdness.
+                const t = 0.02 + (i / (slatCount - 1)) * 0.96;
+                
+                const pos = topCurve.getPointAt(t);
+                const tangent = topCurve.getTangentAt(t).normalize();
+                
+                const slat = new THREE.Mesh(slatGeo, woodMat);
+                
+                // Position: On the curve line.
+                // We need to offset Y up by half thickness so it sits ON the curve, not IN it.
+                slat.position.copy(pos);
+                slat.position.y += slatThick / 2; 
+                
+                // Rotation: Align Box X axis to Tangent
+                // Default box is aligned to world axes.
+                // Tangent is 2D in XY plane essentially.
+                const angleZ = Math.atan2(tangent.y, tangent.x);
+                slat.rotation.z = angleZ;
+                
+                slat.castShadow = true;
+                slat.receiveShadow = true;
+                group.add(slat);
+            }
+
+            // --- 4. Cross Beams (Querbalken) ---
+            // Structural supports between panels
+            const beamGeo = new THREE.BoxGeometry(0.5, 1.5, 6.0); // Spans gap
+            
+            // Beam 1: Near Head
+            const beam1 = new THREE.Mesh(beamGeo, woodMat);
+            beam1.position.set(2, 4, 0); // Roughly middle of panels width
+            group.add(beam1);
+            
+            // Beam 2: Under Seat
+            const beam2 = new THREE.Mesh(beamGeo, woodMat);
+            beam2.position.set(8, 1, 0);
+            group.add(beam2);
+
+            // Beam 3: Near Feet
+            const beam3 = new THREE.Mesh(beamGeo, woodMat);
+            beam3.position.set(16, 2, 0);
+            group.add(beam3);
+
+            return group;
+        }
+
+        const lounger = createLounger();
+        // Center geometry
+        lounger.position.x = -10;
+        lounger.position.y = -2;
+        scene.add(lounger);
+
+        document.getElementById('loading').style.display = 'none';
+
+        // --- Environment ---
+        const floorGeo = new THREE.PlaneGeometry(50, 50);
+        const floorMat = new THREE.ShadowMaterial({ opacity: 0.15 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -2.5; // Lowest point of rocker is -1.5, centered at -2 -> -3.5. 
+        // Our rocker bottom is at Y=-1.5 local. + (-2 offset) = -3.5.
+        // Let's adjust floor.
+        floor.position.y = -3.5;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const grid = new THREE.GridHelper(50, 50, 0xcccccc, 0xeeeeee);
+        grid.position.y = -3.51;
+        scene.add(grid);
+
+        // --- Animation ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>

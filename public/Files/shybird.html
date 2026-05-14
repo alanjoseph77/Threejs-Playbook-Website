@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mining Birds</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #e8f4f8, #d4e8f0);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            cursor: none;
+        }
+        
+        #world {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+        
+        .ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            color: #5a4a3a;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .ui h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #ff5535;
+        }
+        
+        .ui p {
+            margin: 5px 0;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 100;
+            color: rgba(90, 74, 58, 0.8);
+            background: rgba(255, 255, 255, 0.7);
+            padding: 15px 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .cursor {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 85, 53, 0.3);
+            border: 2px solid #ff5535;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 200;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s ease;
+        }
+        
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="world">
+        
+        
+        <div class="instructions">
+            Move your mouse to interact with the birds.<br>
+            Notice how they get shy when you look at them directly!<br>
+            Each bird has its own personality and reaction timing.
+        </div>
+        
+        <div class="cursor" id="cursor"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script>
+        // THREEJS RELATED VARIABLES 
+        var scene, camera, controls, fieldOfView, aspectRatio, nearPlane, farPlane,
+            shadowLight, backLight, light, renderer, container;
+
+        // SCENE
+        var floor, bird1, bird2, bird3;
+
+        // SCREEN VARIABLES
+        var HEIGHT, WIDTH, windowHalfX, windowHalfY,
+            mousePos = {x: 0, y: 0};
+
+        // INIT THREE JS, SCREEN AND MOUSE EVENTS
+        function init() {
+            scene = new THREE.Scene();
+            HEIGHT = window.innerHeight;
+            WIDTH = window.innerWidth;
+            aspectRatio = WIDTH / HEIGHT;
+            fieldOfView = 60;
+            nearPlane = 1;
+            farPlane = 2000;
+            camera = new THREE.PerspectiveCamera(fieldOfView, aspectRatio, nearPlane, farPlane);
+            camera.position.z = 1000;
+            camera.position.y = 300;
+            camera.lookAt(new THREE.Vector3(0, 0, 0));
+            
+            renderer = new THREE.WebGLRenderer({alpha: true, antialias: true});
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(WIDTH, HEIGHT);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            container = document.getElementById('world');
+            container.appendChild(renderer.domElement);
+
+            windowHalfX = WIDTH / 2;
+            windowHalfY = HEIGHT / 2;
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('mousemove', handleMouseMove, false);
+            document.addEventListener('touchstart', handleTouchStart, false);
+            document.addEventListener('touchend', handleTouchEnd, false);
+            document.addEventListener('touchmove', handleTouchMove, false);
+        }
+
+        function onWindowResize() {
+            HEIGHT = window.innerHeight;
+            WIDTH = window.innerWidth;
+            windowHalfX = WIDTH / 2;
+            windowHalfY = HEIGHT / 2;
+            renderer.setSize(WIDTH, HEIGHT);
+            camera.aspect = WIDTH / HEIGHT;
+            camera.updateProjectionMatrix();
+        }
+
+        function handleMouseMove(event) {
+            mousePos = {x: event.clientX, y: event.clientY};
+            
+            // Update custom cursor
+            const cursor = document.getElementById('cursor');
+            cursor.style.left = event.clientX + 'px';
+            cursor.style.top = event.clientY + 'px';
+        }
+
+        function handleTouchStart(event) {
+            if (event.touches.length > 1) {
+                event.preventDefault();
+                mousePos = {x: event.touches[0].pageX, y: event.touches[0].pageY};
+            }
+        }
+
+        function handleTouchEnd(event) {
+            mousePos = {x: windowHalfX, y: windowHalfY};
+        }
+
+        function handleTouchMove(event) {
+            if (event.touches.length == 1) {
+                event.preventDefault();
+                mousePos = {x: event.touches[0].pageX, y: event.touches[0].pageY};
+            }
+        }
+
+        function createLights() {
+            light = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.5);
+
+            shadowLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            shadowLight.position.set(200, 200, 200);
+            shadowLight.castShadow = true;
+            shadowLight.shadow.darkness = 0.2;
+
+            backLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            backLight.position.set(-100, 200, 50);
+            backLight.shadow.darkness = 0.1;
+            backLight.castShadow = true;
+
+            scene.add(backLight);
+            scene.add(light);
+            scene.add(shadowLight);
+        }
+
+        // BIRD
+        function Bird() {
+            this.rSegments = 4;
+            this.hSegments = 3;
+            this.cylRay = 120;
+            this.bodyBirdInitPositions = [];
+            this.vAngle = this.hAngle = 0;
+            this.normalSkin = {r: 180/255, g: 180/255, b: 200/255};
+            this.shySkin = {r: 120/255, g: 140/255, b: 160/255};
+            this.color = {r: this.normalSkin.r, g: this.normalSkin.g, b: this.normalSkin.b};
+            this.side = "left";
+
+            this.shyAngles = {h: 0, v: 0};
+            this.behaviourInterval;
+            this.intervalRunning = false;
+
+            this.threegroup = new THREE.Group();
+
+            // Materials - Mining themed colors
+            this.yellowMat = new THREE.MeshLambertMaterial({color: 0xb4b4c8}); // Silver-gray body
+            this.whiteMat = new THREE.MeshLambertMaterial({color: 0xffffff}); // White eyes
+            this.blackMat = new THREE.MeshLambertMaterial({color: 0x000000}); // Black pupils
+            this.orangeMat = new THREE.MeshLambertMaterial({color: 0x8b7355}); // Mining tool brown
+
+            // WINGS - Realistic with individual feather structure
+            this.wingLeftGroup = new THREE.Group();
+            this.wingRightGroup = new THREE.Group();
+
+            // Create feather material with slight shine
+            var featherMat = this.yellowMat;
+            var featherDarkMat = new THREE.MeshLambertMaterial({color: 0x9a9aaa}); // Darker feather tips
+
+            // Individual feather geometry - elongated and tapered
+            function createFeather(length, width, thickness) {
+                var shape = new THREE.Shape();
+                shape.moveTo(0, 0);
+                shape.quadraticCurveTo(width/4, length/3, width/2, length/2);
+                shape.quadraticCurveTo(width/3, length*0.8, width/4, length);
+                shape.lineTo(-width/4, length);
+                shape.quadraticCurveTo(-width/3, length*0.8, -width/2, length/2);
+                shape.quadraticCurveTo(-width/4, length/3, 0, 0);
+
+                var extrudeSettings = {
+                    depth: thickness,
+                    bevelEnabled: true,
+                    bevelThickness: thickness/4,
+                    bevelSize: thickness/4,
+                    bevelSegments: 2
+                };
+                return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            }
+
+            // LEFT WING - Primary feathers
+            var primaryFeatherGeom = createFeather(45, 12, 2);
+            var secondaryFeatherGeom = createFeather(38, 11, 2);
+            var covertFeatherGeom = createFeather(30, 10, 1.5);
+
+            // Primary feathers (longest, at wing tip)
+            for(var i = 0; i < 5; i++) {
+                var feather = new THREE.Mesh(primaryFeatherGeom, i > 3 ? featherDarkMat : featherMat);
+                feather.position.x = 50 + i * 10;
+                feather.position.y = -8 - i * 8;
+                feather.position.z = -1;
+                feather.rotation.z = -0.3 - i * 0.15;
+                feather.rotation.x = Math.PI / 2;
+                this.wingLeftGroup.add(feather);
+            }
+
+            // Secondary feathers (mid-wing)
+            for(var i = 0; i < 4; i++) {
+                var feather = new THREE.Mesh(secondaryFeatherGeom, featherMat);
+                feather.position.x = 20 + i * 10;
+                feather.position.y = 2 - i * 6;
+                feather.position.z = -1;
+                feather.rotation.z = -0.15 - i * 0.1;
+                feather.rotation.x = Math.PI / 2;
+                this.wingLeftGroup.add(feather);
+            }
+
+            // Covert feathers (wing base, smaller)
+            for(var i = 0; i < 3; i++) {
+                var feather = new THREE.Mesh(covertFeatherGeom, featherMat);
+                feather.position.x = -5 + i * 10;
+                feather.position.y = 8 - i * 4;
+                feather.position.z = 0;
+                feather.rotation.z = -0.05 - i * 0.05;
+                feather.rotation.x = Math.PI / 2;
+                this.wingLeftGroup.add(feather);
+            }
+
+            this.wingLeftGroup.position.x = 70;
+            this.wingLeftGroup.position.z = 0;
+            this.wingLeftGroup.rotation.y = Math.PI / 2;
+            this.wingLeftGroup.rotation.x = -Math.PI / 4;
+
+            // RIGHT WING - Mirror of left wing
+            // Primary feathers
+            for(var i = 0; i < 5; i++) {
+                var feather = new THREE.Mesh(primaryFeatherGeom, i > 3 ? featherDarkMat : featherMat);
+                feather.position.x = -50 - i * 10;
+                feather.position.y = -8 - i * 8;
+                feather.position.z = -1;
+                feather.rotation.z = 0.3 + i * 0.15;
+                feather.rotation.x = Math.PI / 2;
+                this.wingRightGroup.add(feather);
+            }
+
+            // Secondary feathers
+            for(var i = 0; i < 4; i++) {
+                var feather = new THREE.Mesh(secondaryFeatherGeom, featherMat);
+                feather.position.x = -20 - i * 10;
+                feather.position.y = 2 - i * 6;
+                feather.position.z = -1;
+                feather.rotation.z = 0.15 + i * 0.1;
+                feather.rotation.x = Math.PI / 2;
+                this.wingRightGroup.add(feather);
+            }
+
+            // Covert feathers
+            for(var i = 0; i < 3; i++) {
+                var feather = new THREE.Mesh(covertFeatherGeom, featherMat);
+                feather.position.x = 5 - i * 10;
+                feather.position.y = 8 - i * 4;
+                feather.position.z = 0;
+                feather.rotation.z = 0.05 + i * 0.05;
+                feather.rotation.x = Math.PI / 2;
+                this.wingRightGroup.add(feather);
+            }
+
+            this.wingRightGroup.position.x = -70;
+            this.wingRightGroup.position.z = 0;
+            this.wingRightGroup.rotation.y = -Math.PI / 2;
+            this.wingRightGroup.rotation.x = -Math.PI / 4;
+
+            // BODY
+            var bodyGeom = new THREE.CylinderGeometry(40, 70, 200, this.rSegments, this.hSegments);
+            this.bodyBird = new THREE.Mesh(bodyGeom, this.yellowMat);
+            this.bodyBird.position.y = 70;
+
+            this.bodyVerticesLength = (this.rSegments + 1) * this.hSegments;
+            for (var i = 0; i < this.bodyVerticesLength; i++) {
+                var tv = this.bodyBird.geometry.attributes.position.array;
+                // Store initial positions for later manipulation
+                this.bodyBirdInitPositions.push({x: 0, y: 0, z: 0});
+            }
+
+            this.threegroup.add(this.bodyBird);
+            this.threegroup.add(this.wingLeftGroup);
+            this.threegroup.add(this.wingRightGroup);
+
+            // EYES - Realistic with multiple layers
+            this.face = new THREE.Group();
+
+            // Eye socket material (slightly darker)
+            var eyeSocketMat = new THREE.MeshLambertMaterial({color: 0xa0a0b0});
+
+            // Create realistic eye structure
+            var eyeballGeom = new THREE.SphereGeometry(28, 32, 32);
+            var irisGeom = new THREE.SphereGeometry(12, 20, 20);
+            var pupilGeom = new THREE.SphereGeometry(6, 16, 16);
+            var eyeSocketGeom = new THREE.SphereGeometry(32, 24, 24);
+
+            // Create iris color material (dark gray-blue for mining theme)
+            var irisMat = new THREE.MeshLambertMaterial({color: 0x4a5a70});
+
+            // LEFT EYE
+            // Eye socket
+            this.leftEyeSocket = new THREE.Mesh(eyeSocketGeom, eyeSocketMat);
+            this.leftEyeSocket.position.x = -32;
+            this.leftEyeSocket.position.y = 120;
+            this.leftEyeSocket.position.z = 32;
+            this.leftEyeSocket.scale.z = 0.6;
+
+            // Eyeball
+            this.leftEye = new THREE.Mesh(eyeballGeom, this.whiteMat);
+            this.leftEye.position.x = -30;
+            this.leftEye.position.y = 120;
+            this.leftEye.position.z = 38;
+
+            // Iris
+            this.leftIris = new THREE.Mesh(irisGeom, irisMat);
+            this.leftIris.position.x = -30;
+            this.leftIris.position.y = 120;
+            this.leftIris.position.z = 62;
+
+            // Pupil
+            this.leftPupil = new THREE.Mesh(pupilGeom, this.blackMat);
+            this.leftPupil.position.x = -30;
+            this.leftPupil.position.y = 120;
+            this.leftPupil.position.z = 66;
+
+            // RIGHT EYE
+            // Eye socket
+            this.rightEyeSocket = new THREE.Mesh(eyeSocketGeom, eyeSocketMat);
+            this.rightEyeSocket.position.x = 32;
+            this.rightEyeSocket.position.y = 120;
+            this.rightEyeSocket.position.z = 32;
+            this.rightEyeSocket.scale.z = 0.6;
+
+            // Eyeball
+            this.rightEye = new THREE.Mesh(eyeballGeom, this.whiteMat);
+            this.rightEye.position.x = 30;
+            this.rightEye.position.y = 120;
+            this.rightEye.position.z = 38;
+
+            // Iris
+            this.rightIris = new THREE.Mesh(irisGeom, irisMat);
+            this.rightIris.position.x = 30;
+            this.rightIris.position.y = 120;
+            this.rightIris.position.z = 62;
+
+            // Pupil
+            this.rightPupil = new THREE.Mesh(pupilGeom, this.blackMat);
+            this.rightPupil.position.x = 30;
+            this.rightPupil.position.y = 120;
+            this.rightPupil.position.z = 66;
+
+            // BEAK
+            var beakGeom = new THREE.ConeGeometry(20, 20, 4, 1);
+            this.beak = new THREE.Mesh(beakGeom, this.orangeMat);
+            this.beak.position.z = 65;
+            this.beak.position.y = 70;
+            this.beak.rotation.x = Math.PI / 2;
+
+            this.face.add(this.leftEyeSocket);
+            this.face.add(this.leftEye);
+            this.face.add(this.leftIris);
+            this.face.add(this.leftPupil);
+            this.face.add(this.rightEyeSocket);
+            this.face.add(this.rightEye);
+            this.face.add(this.rightIris);
+            this.face.add(this.rightPupil);
+            this.face.add(this.beak);
+
+            // FEATHERS
+            var featherGeom = new THREE.BoxGeometry(10, 20, 5);
+            this.feather1 = new THREE.Mesh(featherGeom, this.yellowMat);
+            this.feather1.position.z = 55;
+            this.feather1.position.y = 185;
+            this.feather1.rotation.x = Math.PI / 4;
+            this.feather1.scale.set(1.5, 1.5, 1);
+
+            this.feather2 = new THREE.Mesh(featherGeom, this.yellowMat);
+            this.feather2.position.z = 50;
+            this.feather2.position.y = 180;
+            this.feather2.position.x = 20;
+            this.feather2.rotation.x = Math.PI / 4;
+            this.feather2.rotation.z = -Math.PI / 8;
+
+            this.feather3 = new THREE.Mesh(featherGeom, this.yellowMat);
+            this.feather3.position.z = 50;
+            this.feather3.position.y = 180;
+            this.feather3.position.x = -20;
+            this.feather3.rotation.x = Math.PI / 4;
+            this.feather3.rotation.z = Math.PI / 8;
+
+            this.face.add(this.feather1);
+            this.face.add(this.feather2);
+            this.face.add(this.feather3);
+            this.threegroup.add(this.face);
+
+            this.threegroup.traverse(function(object) {
+                if (object instanceof THREE.Mesh) {
+                    object.castShadow = true;
+                    object.receiveShadow = true;
+                }
+            });
+        }
+
+        Bird.prototype.look = function(hAngle, vAngle) {
+            this.hAngle = hAngle;
+            this.vAngle = vAngle;
+
+            // Move iris
+            this.leftIris.position.y = 120 - this.vAngle * 30;
+            this.leftIris.position.x = -30 + this.hAngle * 10;
+            this.leftIris.position.z = 62 + this.hAngle * 8;
+
+            this.rightIris.position.y = 120 - this.vAngle * 30;
+            this.rightIris.position.x = 30 + this.hAngle * 10;
+            this.rightIris.position.z = 62 - this.hAngle * 8;
+
+            // Move pupil with iris
+            this.leftPupil.position.y = 120 - this.vAngle * 30;
+            this.leftPupil.position.x = -30 + this.hAngle * 10;
+            this.leftPupil.position.z = 66 + this.hAngle * 8;
+
+            this.rightPupil.position.y = 120 - this.vAngle * 30;
+            this.rightPupil.position.x = 30 + this.hAngle * 10;
+            this.rightPupil.position.z = 66 - this.hAngle * 8;
+
+            // Move eyeballs
+            this.leftEye.position.y = this.rightEye.position.y = 120 - this.vAngle * 10;
+
+            this.beak.position.y = 70 - this.vAngle * 20;
+            this.beak.rotation.x = Math.PI / 2 + this.vAngle / 3;
+
+            this.feather1.rotation.x = (Math.PI / 4) + (this.vAngle / 2);
+            this.feather1.position.y = 185 - this.vAngle * 10;
+            this.feather1.position.z = 55 + this.vAngle * 10;
+
+            this.feather2.rotation.x = (Math.PI / 4) + (this.vAngle / 2);
+            this.feather2.position.y = 180 - this.vAngle * 10;
+            this.feather2.position.z = 50 + this.vAngle * 10;
+
+            this.feather3.rotation.x = (Math.PI / 4) + (this.vAngle / 2);
+            this.feather3.position.y = 180 - this.vAngle * 10;
+            this.feather3.position.z = 50 + this.vAngle * 10;
+
+            this.face.rotation.y = this.hAngle;
+        };
+
+        Bird.prototype.lookAway = function(fastMove) {
+            var speed = fastMove ? 0.4 : 2;
+            var delay = fastMove ? 0.2 : 0;
+            var col = fastMove ? this.shySkin : this.normalSkin;
+            var tv = (-1 + Math.random() * 2) * Math.PI / 3;
+            var beakScaleX = 0.75 + Math.random() * 0.25;
+            var beakScaleZ = 0.5 + Math.random() * 0.5;
+
+            if (this.side == "right") {
+                var th = (-1 + Math.random()) * Math.PI / 4;
+            } else {
+                var th = Math.random() * Math.PI / 4;
+            }
+            
+            var _this = this;
+            gsap.killTweensOf(this.shyAngles);
+            gsap.to(this.shyAngles, {duration: speed, v: tv, h: th, delay: delay});
+            gsap.to(this.color, {duration: speed, r: col.r, g: col.g, b: col.b, delay: delay});
+            gsap.to(this.beak.scale, {duration: speed, z: beakScaleZ, x: beakScaleX, delay: delay});
+        };
+
+        Bird.prototype.stare = function() {
+            var _this = this;
+            var col = this.normalSkin;
+            if (this.side == "right") {
+                var th = Math.PI / 3;
+            } else {
+                var th = -Math.PI / 3;
+            }
+            gsap.to(this.shyAngles, {duration: 2, v: -0.5, h: th});
+            gsap.to(this.color, {duration: 2, r: col.r, g: col.g, b: col.b});
+            gsap.to(this.beak.scale, {duration: 2, z: 0.8, x: 1.5});
+        };
+
+        function createFloor() {
+            floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(1000, 1000), 
+                new THREE.MeshBasicMaterial({color: 0xe0dacd})
+            );
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -33;
+            floor.receiveShadow = true;
+            scene.add(floor);
+        }
+
+        function createBirds() {
+            bird1 = new Bird();
+            bird1.threegroup.position.x = 0;
+            scene.add(bird1.threegroup);
+
+            bird2 = new Bird();
+            bird2.threegroup.position.x = -250;
+            bird2.side = "right";
+            bird2.threegroup.scale.set(0.8, 0.8, 0.8);
+            bird2.threegroup.position.y = -8;
+            scene.add(bird2.threegroup);
+
+            bird3 = new Bird();
+            bird3.threegroup.position.x = 250;
+            bird3.side = "left";
+            bird3.threegroup.scale.set(0.8, 0.8, 0.8);
+            bird3.threegroup.position.y = -8;
+            scene.add(bird3.threegroup);
+        }
+
+        function loop() {
+            var tempHA = (mousePos.x - windowHalfX) / 200;
+            var tempVA = (mousePos.y - windowHalfY) / 200;
+            var userHAngle = Math.min(Math.max(tempHA, -Math.PI / 3), Math.PI / 3);
+            var userVAngle = Math.min(Math.max(tempVA, -Math.PI / 3), Math.PI / 3);
+            bird1.look(userHAngle, userVAngle);
+
+            if (bird1.hAngle < -Math.PI / 5 && !bird2.intervalRunning) {
+                bird2.lookAway(true);
+                bird2.intervalRunning = true;
+                bird2.behaviourInterval = setInterval(function() {
+                    bird2.lookAway(false);
+                }, 1500);
+            } else if (bird1.hAngle > 0 && bird2.intervalRunning) {
+                bird2.stare();
+                clearInterval(bird2.behaviourInterval);
+                bird2.intervalRunning = false;
+            } else if (bird1.hAngle > Math.PI / 5 && !bird3.intervalRunning) {
+                bird3.lookAway(true);
+                bird3.intervalRunning = true;
+                bird3.behaviourInterval = setInterval(function() {
+                    bird3.lookAway(false);
+                }, 1500);
+            } else if (bird1.hAngle < 0 && bird3.intervalRunning) {
+                bird3.stare();
+                clearInterval(bird3.behaviourInterval);
+                bird3.intervalRunning = false;
+            }
+
+            bird2.look(bird2.shyAngles.h, bird2.shyAngles.v);
+            bird2.bodyBird.material.color.setRGB(bird2.color.r, bird2.color.g, bird2.color.b);
+
+            bird3.look(bird3.shyAngles.h, bird3.shyAngles.v);
+            bird3.bodyBird.material.color.setRGB(bird3.color.r, bird3.color.g, bird3.color.b);
+
+            render();
+            requestAnimationFrame(loop);
+        }
+
+        function render() {
+            renderer.render(scene, camera);
+        }
+
+        // Initialize the scene
+        init();
+        createLights();
+        createFloor();
+        createBirds();
+        
+        // Start with mouse in center
+        mousePos = {x: windowHalfX, y: windowHalfY};
+        
+        loop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Gate Valve Assembly</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #202025;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #e0e0e0;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            pointer-events: none;
+            user-select: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            margin: 0 0 5px 0;
+            font-size: 1.2rem;
+            color: #ffd700;
+            /* Gold color matching the valve body */
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        .legend {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: 15px auto;
+            gap: 5px;
+            font-size: 0.8rem;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            transform: translateY(2px);
+        }
+    </style>
+    <!-- Import Maps Polyfill for better browser compatibility -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+</head>
+
+<body>
+    <!-- <div id="ui-container">
+        <h1>Gate Valve Assembly</h1>
+        <p>Procedural Generation • Three.js</p>
+        <div class="legend">
+            <span class="dot" style="background: #d4af37;"></span> <span>Brass Body</span>
+            <span class="dot" style="background: #a0a0a0;"></span> <span>Alloy Steel Union</span>
+            <span class="dot" style="background: #b32d2d;"></span> <span>Hand Wheel</span>
+        </div>
+    </div> -->
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x202025); // Engineering Dark Grey
+        // Add some subtle fog for depth
+        scene.fog = new THREE.Fog(0x202025, 200, 500);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(80, 100, 120);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // Tone mapping for realistic metal look
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 40, 0);
+
+        // --- LIGHTING (Studio Configuration) ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        mainLight.position.set(50, 80, 50);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        scene.add(mainLight);
+
+        const rimLight = new THREE.DirectionalLight(0xddeeff, 0.5);
+        rimLight.position.set(-50, 20, -50);
+        scene.add(rimLight);
+
+        const bottomLight = new THREE.PointLight(0xffaa00, 0.3); // Warm bounce from brass
+        bottomLight.position.set(0, -20, 0);
+        scene.add(bottomLight);
+
+        // --- MATERIALS ---
+
+        // Brass Body: High metalness, gold-yellow color, slight roughness
+        const brassMat = new THREE.MeshStandardMaterial({
+            color: 0xd4af37,
+            roughness: 0.35,
+            metalness: 0.8,
+        });
+
+        // Steel Parts: Grey, smoother
+        const steelMat = new THREE.MeshStandardMaterial({
+            color: 0xa0a0a0,
+            roughness: 0.25,
+            metalness: 0.9,
+        });
+
+        // Paint: Red, dielectric (low metalness), glossier
+        // Paint: Red, dielectric (low metalness), glossier
+        const paintMat = new THREE.MeshPhysicalMaterial({
+            color: 0xb32d2d,
+            roughness: 0.2,
+            metalness: 0.1,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.1
+        });
+
+        // Dark internal parts
+        const darkMetalMat = new THREE.MeshStandardMaterial({
+            color: 0x333333,
+            roughness: 0.7,
+            metalness: 0.5
+        });
+
+        // --- GEOMETRY CONSTRUCTION ---
+
+        const valveGroup = new THREE.Group();
+        scene.add(valveGroup);
+
+        // 1. VALVE BODY (Brass)
+        function createBody() {
+            const bodyGroup = new THREE.Group();
+
+            // Main vertical cylinder
+            const vertCyl = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 45, 32), brassMat);
+            vertCyl.position.y = 22.5;
+            vertCyl.castShadow = true;
+            vertCyl.receiveShadow = true;
+            bodyGroup.add(vertCyl);
+
+            // Horizontal pipe flow path
+            const horizCyl = new THREE.Mesh(new THREE.CylinderGeometry(13, 13, 54, 32), brassMat);
+            horizCyl.rotation.z = Math.PI / 2;
+            horizCyl.position.y = 20;
+            horizCyl.castShadow = true;
+            horizCyl.receiveShadow = true;
+            bodyGroup.add(horizCyl);
+
+            // Hexagonal Ends (Connection points)
+            // Created using CylinderGeometry with 6 segments
+            const hexGeo = new THREE.CylinderGeometry(19, 19, 10, 6);
+            const hexLeft = new THREE.Mesh(hexGeo, brassMat);
+            hexLeft.rotation.z = Math.PI / 2;
+            hexLeft.position.set(-27, 20, 0);
+            hexLeft.castShadow = true;
+
+            const hexRight = hexLeft.clone();
+            hexRight.position.set(27, 20, 0);
+
+            bodyGroup.add(hexLeft);
+            bodyGroup.add(hexRight);
+
+            // Top Flange Rim
+            const topRim = new THREE.Mesh(new THREE.CylinderGeometry(20, 19, 4, 32), brassMat);
+            topRim.position.y = 45;
+            topRim.receiveShadow = true;
+            bodyGroup.add(topRim);
+
+            // Decorative: Inner hole illusion (using black circles at ends)
+            const holeGeo = new THREE.CircleGeometry(10, 32);
+            const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+            const leftHole = new THREE.Mesh(holeGeo, holeMat);
+            leftHole.rotation.y = -Math.PI / 2;
+            leftHole.position.set(-32.1, 20, 0);
+            bodyGroup.add(leftHole);
+
+            const rightHole = new THREE.Mesh(holeGeo, holeMat);
+            rightHole.rotation.y = Math.PI / 2;
+            rightHole.position.set(32.1, 20, 0);
+            bodyGroup.add(rightHole);
+
+            valveGroup.add(bodyGroup);
+        }
+
+        // 2. UNION & BONNET (Steel)
+        function createUnion() {
+            const unionGroup = new THREE.Group();
+            unionGroup.position.y = 45; // Stack on top of body
+
+            // Union Nut (Hexagonal)
+            // Using 6 segments for that distinct nut look
+            const unionNut = new THREE.Mesh(new THREE.CylinderGeometry(18, 18, 12, 6), steelMat);
+            unionNut.position.y = 6;
+            unionNut.castShadow = true;
+            unionGroup.add(unionNut);
+
+            // Bonnet Neck
+            const bonnetNeck = new THREE.Mesh(new THREE.CylinderGeometry(12, 14, 18, 32), steelMat);
+            bonnetNeck.position.y = 20;
+            bonnetNeck.castShadow = true;
+            unionGroup.add(bonnetNeck);
+
+            // Gland Nut (Top of bonnet)
+            const glandNut = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 8, 6), steelMat);
+            glandNut.position.y = 32;
+            glandNut.castShadow = true;
+            unionGroup.add(glandNut);
+
+            valveGroup.add(unionGroup);
+        }
+
+        // 3. SPINDLE & WEDGE (Moving parts)
+        let spindleGroup;
+        function createSpindle() {
+            spindleGroup = new THREE.Group();
+
+            // The Threaded Rod (Spindle)
+            // We use a texture or bump map ideally, but here we use geometry for clarity
+            const rod = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 90, 16), steelMat);
+            rod.position.y = 50; // Centered vertically relative to its motion
+            rod.castShadow = true;
+            spindleGroup.add(rod);
+
+            // The Wedge (Gate) - The part that blocks water
+            // Hidden mostly inside, but visible if we animate
+            const wedgeGeo = new THREE.BoxGeometry(20, 25, 8);
+
+            // Make the wedge tapered (simple approximation by scaling bottom vertices would be harder without custom buffer geometry, 
+            // so we use a simple box for the procedural mockup)
+            const wedge = new THREE.Mesh(wedgeGeo, brassMat);
+            wedge.position.y = 20;
+            spindleGroup.add(wedge);
+
+            valveGroup.add(spindleGroup);
+        }
+
+        // 4. HAND WHEEL (Red)
+        let handWheelGroup;
+        function createHandWheel() {
+            handWheelGroup = new THREE.Group();
+            handWheelGroup.position.y = 95; // Top of spindle
+
+            // The Rim (Torus)
+            const rim = new THREE.Mesh(new THREE.TorusGeometry(28, 4.5, 16, 40), paintMat);
+            rim.rotation.x = Math.PI / 2;
+            rim.castShadow = true;
+            handWheelGroup.add(rim);
+
+            // Spokes (Cylinders)
+            const spokeGeo = new THREE.CylinderGeometry(2.5, 2.5, 26, 8);
+            spokeGeo.rotateZ(Math.PI / 2); // Lay flat
+
+            for (let i = 0; i < 5; i++) {
+                const spoke = new THREE.Mesh(spokeGeo, paintMat);
+                spoke.rotation.y = (i / 5) * Math.PI * 2;
+                spoke.translateX(12); // Offset from center
+                handWheelGroup.add(spoke);
+            }
+
+            // Central Hub
+            const hub = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 8, 16), paintMat);
+            hub.castShadow = true;
+            handWheelGroup.add(hub);
+
+            // Top Nut Lock
+            const nut = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 5, 6), steelMat);
+            nut.position.y = 5;
+            handWheelGroup.add(nut);
+
+            valveGroup.add(handWheelGroup);
+        }
+
+        // --- BUILD ---
+        createBody();
+        createUnion();
+        createSpindle();
+        createHandWheel();
+
+        // --- GROUND ---
+        const gridHelper = new THREE.GridHelper(200, 20, 0x555555, 0x333333);
+        gridHelper.position.y = 0;
+        scene.add(gridHelper);
+
+        // Shadow Plane
+        const planeGeo = new THREE.PlaneGeometry(200, 200);
+        const planeMat = new THREE.ShadowMaterial({ opacity: 0.3 });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = 0.1; // Just above grid
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // --- ANIMATION LOGIC ---
+        let time = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            time += 0.01;
+
+            // Animate Hand Wheel Rotation
+            if (handWheelGroup) {
+                // Oscillate rotation to simulate opening and closing
+                handWheelGroup.rotation.y = Math.sin(time) * Math.PI * 2;
+            }
+
+            // Animate Spindle (Up and Down based on wheel rotation)
+            if (spindleGroup) {
+                // Basic mechanic: Rotation translates to linear motion
+                // Range: y=0 (closed) to y=15 (open)
+                const lift = (Math.sin(time) + 1) * 7.5;
+                spindleGroup.position.y = lift;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // --- RESIZE HANDLER ---
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+
+</html>

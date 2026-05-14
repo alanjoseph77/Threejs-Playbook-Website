@@ -1,0 +1,337 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leather Chair 3D Model</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #e0e0e0; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            font-family: 'Segoe UI', sans-serif;
+            color: #333;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: sans-serif;
+            font-size: 24px;
+            color: #555;
+            background: rgba(255,255,255,0.8);
+            padding: 20px;
+            border-radius: 10px;
+        }
+    </style>
+    <!-- Import Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="info">
+        <h2>Leather Chair</h2>
+        
+    </div>
+    <div id="loading">Upholstering...</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+        // --- Configuration ---
+        const SCALE = 0.015; // Scale down for viewing
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xe0e0e0);
+        scene.fog = new THREE.Fog(0xe0e0e0, 20, 60);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(10, 10, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 2, 0);
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        mainLight.position.set(5, 10, 8);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        scene.add(mainLight);
+
+        const fillLight = new THREE.DirectionalLight(0xffeedd, 0.5);
+        fillLight.position.set(-5, 5, -5);
+        scene.add(fillLight);
+
+        // --- Procedural Textures ---
+
+        function createLeatherTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Base Brown
+            ctx.fillStyle = '#8B5A2B'; 
+            ctx.fillRect(0, 0, 512, 512);
+
+            // Noise for grain
+            for (let i = 0; i < 60000; i++) {
+                const x = Math.random() * 512;
+                const y = Math.random() * 512;
+                const shade = Math.random() > 0.5 ? 255 : 0;
+                const alpha = Math.random() * 0.1;
+                ctx.fillStyle = `rgba(${shade}, ${shade}, ${shade}, ${alpha})`;
+                ctx.fillRect(x, y, 2, 2);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        const leatherMap = createLeatherTexture();
+        
+        // Materials
+        const leatherMat = new THREE.MeshStandardMaterial({
+            color: 0xcd853f, // Peru / Light Brown
+            map: leatherMap,
+            roughness: 0.6,
+            metalness: 0.1,
+            bumpMap: leatherMap,
+            bumpScale: 0.02
+        });
+
+        const alloyMat = new THREE.MeshStandardMaterial({
+            color: 0x888888,
+            roughness: 0.4,
+            metalness: 0.8
+        });
+
+        // --- Geometry Construction ---
+
+        function createChair(mirrorFrame = false, frameXPos = null) {
+            const chairGroup = new THREE.Group();
+
+            // Dimensions from drawing (in mm)
+            // We scale everything by 0.01 inside the group for ThreeJS units
+
+            // 1. Bottom Seat (Item 1)
+            // 330 x 330, R40 corners. Thickness approx 60mm (from side view)
+            const seatW = 3.3;
+            const seatD = 3.3;
+            const seatH = 0.6;
+            const seatRadius = 0.4;
+
+            const seatGeo = new RoundedBoxGeometry(seatW, seatH, seatD, 8, seatRadius);
+            const seat = new THREE.Mesh(seatGeo, leatherMat);
+            seat.position.y = 0; // Center at origin for now
+            seat.castShadow = true;
+            seat.receiveShadow = true;
+            chairGroup.add(seat);
+
+            // 2. Back Seat (Item 2)
+            // Width similar to seat (330), Height ~250 (drawing says 250 top to pivot area?)
+            // R20 corners. 
+            // Angle 98 degrees from horizontal? Or 98 deg between seat and back.
+            // Blueprint: "98 deg" angle shown between seat top surface and back rest front surface.
+            
+            const backW = 3.3;
+            const backH = 2.5; // 250mm
+            const backThick = 0.5; // ~50mm
+            const backRadius = 0.2; // R20
+
+            const backGeo = new RoundedBoxGeometry(backW, backH, backThick, 8, backRadius);
+            const back = new THREE.Mesh(backGeo, leatherMat);
+            
+            // Positioning the back
+            // It sits behind the seat. 
+            // Pivot point is roughly at the bottom of the back cushion.
+            const pivotY = seatH / 2 + 0.2; 
+            const pivotZ = -seatD / 2 + 0.2;
+            
+            back.position.set(0, pivotY + backH/2, pivotZ);
+            
+            // Rotation: 98 degrees means 8 degrees backward from vertical (90+8=98)
+            const tiltAngle = THREE.MathUtils.degToRad(8); 
+            
+            // We need to rotate around the bottom edge. 
+            // Reset position to relative, rotate, then translate.
+            back.geometry.translate(0, backH/2, 0); // Move pivot to bottom of geometry
+            back.position.set(0, pivotY, pivotZ); // Move mesh to pivot location
+            back.rotation.x = -tiltAngle; // Tilt back
+            
+            back.castShadow = true;
+            chairGroup.add(back);
+
+            // 3. Handles (Items 4 & 5)
+            // Length 200, positioned 175mm above seat? Drawing says 175 from seat top to arm center.
+            // Rounded ends R20/R30.
+            const armL = 3.0;
+            const armW = 0.6; // Width
+            const armThick = 0.3; // Height
+            const armGeo = new RoundedBoxGeometry(armThick, armW, armL, 8, 0.15); // x,y,z swapped for orientation
+
+            const armOffsetX = (seatW / 2) + 0.1; // Stick out slightly
+            const armY = (seatH / 2) + 1.10; // 175mm up
+            const armZ = -0.5; // Centered roughly? Drawing shows offset 20mm from back
+
+            // Left Handle
+            const armLeft = new THREE.Mesh(armGeo, leatherMat);
+            armLeft.position.set(-armOffsetX, armY, armZ);
+            armLeft.castShadow = true;
+            chairGroup.add(armLeft);
+
+            // Right Handle
+            const armRight = new THREE.Mesh(armGeo, leatherMat);
+            armRight.position.set(armOffsetX, armY, armZ);
+            armRight.castShadow = true;
+            chairGroup.add(armRight);
+
+            // 4. Embedded Bar (Item 3)
+            // Connects handles through the back? Or just structural.
+            // Drawing shows handles connecting to side of back frame.
+            // // Let's create small connector cylinders.
+            // const connGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.4, 16);
+            // const connLeft = new THREE.Mesh(connGeo, alloyMat);
+            // connLeft.rotation.z = Math.PI / 2;
+            // connLeft.position.set(-seatW/2, armY, armZ - 0.2); // Further back
+            // chairGroup.add(connLeft);
+
+            // const connRight = new THREE.Mesh(connGeo, alloyMat);
+            // connRight.rotation.z = Math.PI / 2;
+            // connRight.position.set(seatW/2, armY, armZ - 0.2);
+            // chairGroup.add(connRight);
+
+
+            // 5. Bottom Frame (Item 6)
+            // The angular bracket under the seat.
+            // Shape from side view:
+            // Top width 300 (matches seat roughly), vertical drop 120, bottom width 80.
+            
+            const shape = new THREE.Shape();
+            // Drawing coordinates relative to top-right corner of frame
+            // Let's draw the profile (Side view)
+            // Start Top Right (0,0)
+            shape.moveTo(0, 0);
+            shape.lineTo(-3.0, 0); // Top width 300
+            shape.lineTo(-3.0, -0.6); // Small drop left
+            shape.lineTo(-1.8, -0.6); // Inset
+            shape.lineTo(-0.8, -1.2); // Diagonal down to bottom (120mm total depth)
+            shape.lineTo(0, -1.2); // Bottom width 80 (approx)
+            shape.lineTo(0, 0); // Close
+            
+            const extrudeSettings = {
+                steps: 2,
+                depth: 0.6, // Width of the metal bracket (60mm)
+                bevelEnabled: false
+            };
+            
+            const frameGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            const bottomFrame = new THREE.Mesh(frameGeo, alloyMat);
+            // Center the frame
+            let frameX;
+            if (frameXPos !== null) {
+                // Use custom frame position
+                frameX = frameXPos-0.6;
+            } else if (mirrorFrame) {
+                // Mirror the frame to the right side
+                frameX = 0.9;
+            } else {
+                // Default left side frame
+                frameX = -0.3;
+            }
+            bottomFrame.position.set(frameX, -seatH/2, 1.5);
+            bottomFrame.rotation.y = -Math.PI / 2; // Rotate to align with seat depth
+            bottomFrame.castShadow = true;
+            chairGroup.add(bottomFrame);
+            
+            // 6. Vertical Frame (Item 7)
+            // Connects seat to back.
+            // Usually a bar.
+            const vFrameGeo = new THREE.BoxGeometry(0.5, 2.0, 0.1);
+            const vFrame = new THREE.Mesh(vFrameGeo, alloyMat);
+            // Position behind seat, angled
+            vFrame.position.set(0, 1.0, -1.8);
+            vFrame.rotation.x = -tiltAngle;
+            chairGroup.add(vFrame);
+
+            return chairGroup;
+        }
+
+        // Create three chairs
+        const chairLeft = createChair(false);
+        chairLeft.position.x = -4; // Position on the left
+        scene.add(chairLeft);
+
+        const chairMiddle = createChair(false, 0.9); // Custom frame position at 0.9
+        chairMiddle.position.x = -0.5; // Position in the middle
+        scene.add(chairMiddle);
+
+        const chairRight = createChair(true); // Mirror the bottom frame
+        chairRight.position.x = 3; // Position on the right
+        scene.add(chairRight);
+
+        // Hide loading
+        document.getElementById('loading').style.display = 'none';
+
+        // --- Environment ---
+        const floorGeo = new THREE.PlaneGeometry(20, 20);
+        const floorMat = new THREE.ShadowMaterial({ opacity: 0.2 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const grid = new THREE.GridHelper(20, 20, 0xbbbbbb, 0xdddddd);
+        grid.position.y = -2.01;
+        scene.add(grid);
+
+        // --- Animation ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>

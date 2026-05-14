@@ -1,0 +1,295 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heavy Duty Steering Wheel</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #222;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+
+        .controls-hint {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.95rem;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 25px;
+            z-index: 10;
+        }
+    </style>
+    <!-- Import Map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="canvas-wrapper">
+        <canvas id="wheelCanvas"></canvas>
+       
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Target Specific Canvas ---
+        const canvas = document.querySelector('#wheelCanvas');
+        const wrapper = document.querySelector('#canvas-wrapper');
+
+        // --- Configuration ---
+        const DIMS = {
+            rimDiameter: 14,
+            hubHeight: 2.5,
+            dishDepth: 1.8, 
+            spokeCount: 3
+        };
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+
+        // Camera setup based on container aspect ratio
+        const camera = new THREE.PerspectiveCamera(65, wrapper.clientWidth / wrapper.clientHeight, 0.1, 100);
+        camera.position.set(20, 0, 20);
+
+        // Renderer attached to existing canvas
+        const renderer = new THREE.WebGLRenderer({ 
+            canvas: canvas, 
+            antialias: true,
+            alpha: false 
+        });
+        renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimization
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+        const controls = new OrbitControls(camera, canvas);
+        controls.enableDamping = true;
+        controls.enableZoom = true;
+
+        // --- Lights ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        mainLight.position.set(10, 10, 20);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 1024; // Lower res for performance
+        mainLight.shadow.mapSize.height = 1024;
+        scene.add(mainLight);
+
+        const rimLight = new THREE.SpotLight(0xbadfff, 1);
+        rimLight.position.set(-10, -10, 10);
+        scene.add(rimLight);
+
+        // --- Textures ---
+        function createNoiseTexture(colorBase) {
+            const size = 512;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = size;
+            tempCanvas.height = size;
+            const ctx = tempCanvas.getContext('2d');
+            
+            ctx.fillStyle = colorBase;
+            ctx.fillRect(0,0,size,size);
+            
+            const imgData = ctx.getImageData(0,0,size,size);
+            for(let i=0; i<imgData.data.length; i+=4){
+                const noise = (Math.random()-0.5) * 30;
+                imgData.data[i] = Math.max(0, Math.min(255, imgData.data[i] + noise));
+                imgData.data[i+1] = Math.max(0, Math.min(255, imgData.data[i+1] + noise));
+                imgData.data[i+2] = Math.max(0, Math.min(255, imgData.data[i+2] + noise));
+            }
+            ctx.putImageData(imgData, 0, 0);
+            
+            const tex = new THREE.CanvasTexture(tempCanvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        const leatherMap = createNoiseTexture('#1a1a1a');
+        const bronzeMap = createNoiseTexture('#cd7f32');
+
+        // --- Materials ---
+        const rubberMat = new THREE.MeshStandardMaterial({
+            color: 0x222222, roughness: 0.9, metalness: 0.1,
+            map: leatherMap, bumpMap: leatherMap, bumpScale: 0.02
+        });
+
+        const aluminumMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff, roughness: 0.4, metalness: 0.9,
+        });
+
+        const bronzeMat = new THREE.MeshStandardMaterial({
+            color: 0xB87333, roughness: 0.7, metalness: 0.6, map: bronzeMap
+        });
+        
+        const logoGoldMat = new THREE.MeshStandardMaterial({
+            color: 0xFFD700, metalness: 0.8, roughness: 0.2
+        });
+
+        // --- Geometry Construction ---
+        const wheelGroup = new THREE.Group();
+        scene.add(wheelGroup);
+
+        // 1. RIM
+        const rimGeo = new THREE.TorusGeometry(7, 0.5, 30, 100);
+        const rimMesh = new THREE.Mesh(rimGeo, rubberMat);
+        rimMesh.castShadow = true;
+        wheelGroup.add(rimMesh);
+
+        // 2. HUB (Splined)
+        function createSplineShape() {
+            const shape = new THREE.Shape();
+            const outerRadius = 1.6; 
+            const innerHoleRadius = 0.5; 
+            const teeth = 22;
+            const toothDepth = 0.05;
+
+            shape.moveTo(outerRadius, 0);
+            shape.absarc(0, 0, outerRadius, 0, Math.PI * 2, false);
+            
+            const holePath = new THREE.Path();
+            for(let i=0; i<teeth * 2; i++) {
+                const angle = (i / (teeth * 2)) * Math.PI * 2;
+                const r = (i % 2 === 0) ? innerHoleRadius : innerHoleRadius + toothDepth;
+                const x = Math.cos(angle) * r;
+                const y = Math.sin(angle) * r;
+                if(i===0) holePath.moveTo(x,y);
+                else holePath.lineTo(x,y);
+            }
+            holePath.closePath();
+            shape.holes.push(holePath);
+            return shape;
+        }
+
+        const hubShape = createSplineShape();
+        const hubGeo = new THREE.ExtrudeGeometry(hubShape, {
+            depth: DIMS.hubHeight, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 2
+        });
+        hubGeo.translate(0, 0, -DIMS.hubHeight/2 - DIMS.dishDepth);
+        const hubMesh = new THREE.Mesh(hubGeo, aluminumMat);
+        hubMesh.castShadow = true;
+        wheelGroup.add(hubMesh);
+
+        // 3. Spokes
+        function createSpoke() {
+            const spokeGroup = new THREE.Group();
+            const startZ = -DIMS.dishDepth + 0.5; 
+            const endZ = 0;
+            const startY = 1.4; 
+            const endY = 6.5; 
+
+            const curve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(0, startY, startZ),
+                new THREE.Vector3(0, startY + 1.5, startZ + 0.2),
+                new THREE.Vector3(0, endY - 1.0, endZ - 0.2),
+                new THREE.Vector3(0, endY, endZ)
+            ]);
+            
+            const strutShape = new THREE.Shape();
+            strutShape.moveTo(-0.15, -0.2); strutShape.lineTo(0.15, -0.2);
+            strutShape.lineTo(0.15, 0.2); strutShape.lineTo(-0.15, 0.2);
+            
+            const strutGeo = new THREE.ExtrudeGeometry(strutShape, { extrudePath: curve, steps: 20, bevelEnabled: false });
+
+            const leftStrut = new THREE.Mesh(strutGeo, aluminumMat);
+            leftStrut.position.x = -0.6; leftStrut.rotation.z = -0.1;
+            
+            const rightStrut = new THREE.Mesh(strutGeo, aluminumMat);
+            rightStrut.position.x = 0.6; rightStrut.rotation.z = 0.1;
+
+            const insertShape = new THREE.Shape();
+            insertShape.moveTo(-0.5, startY); insertShape.lineTo(0.5, startY);
+            insertShape.lineTo(0.9, endY); insertShape.lineTo(-0.9, endY); insertShape.closePath();
+            
+            const insertGeo = new THREE.ExtrudeGeometry(insertShape, { depth: 0.2, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05 });
+            const insertMesh = new THREE.Mesh(insertGeo, bronzeMat);
+            insertMesh.rotation.x = -Math.PI/2 + 0.3; 
+            insertMesh.position.z = startZ;
+            
+            spokeGroup.add(leftStrut); spokeGroup.add(rightStrut); spokeGroup.add(insertMesh);
+            return spokeGroup;
+        }
+
+        const spokeTemplate = createSpoke();
+        for (let i = 0; i < 3; i++) {
+            const spoke = spokeTemplate.clone();
+            spoke.rotation.z = (i * 120) * (Math.PI / 180);
+            wheelGroup.add(spoke);
+        }
+        
+        // 4. Cap & Logo
+        const capGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 32);
+        capGeo.rotateX(Math.PI/2);
+        const capMesh = new THREE.Mesh(capGeo, aluminumMat);
+        capMesh.position.z = -DIMS.dishDepth + DIMS.hubHeight + 0.1;
+        wheelGroup.add(capMesh);
+
+        const bowtieShape = new THREE.Shape();
+        bowtieShape.moveTo(-0.4, -0.1); bowtieShape.lineTo(-0.4, 0.1);
+        bowtieShape.lineTo(-0.15, 0.1); bowtieShape.lineTo(-0.15, 0.25);
+        bowtieShape.lineTo(0.15, 0.25); bowtieShape.lineTo(0.15, 0.1);
+        bowtieShape.lineTo(0.4, 0.1); bowtieShape.lineTo(0.4, -0.1);
+        bowtieShape.lineTo(0.15, -0.1); bowtieShape.lineTo(0.15, -0.25);
+        bowtieShape.lineTo(-0.15, -0.25); bowtieShape.lineTo(-0.15, -0.1);
+        
+        const bowtieGeo = new THREE.ExtrudeGeometry(bowtieShape, { depth: 0.05, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02 });
+        const bowtieMesh = new THREE.Mesh(bowtieGeo, logoGoldMat);
+        bowtieMesh.position.z = capMesh.position.z + 0.1;
+        wheelGroup.add(bowtieMesh);
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- Window Resize Handler ---
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+    </script>
+</body>
+</html>

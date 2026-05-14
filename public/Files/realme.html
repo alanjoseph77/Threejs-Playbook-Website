@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realme GT 6T - 3D Model (v3)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2em;
+            font-weight: 300;
+        }
+    </style>
+    <script src="../security.js"></script>
+</head>
+
+<body>
+    <div id="loader">Loading 3D Model, Textures & Environment...</div>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.1/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+        import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+        import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+        let scene, camera, renderer, controls, phoneGroup;
+        let materials = {};
+        let textureLoader;
+        let backCoverMesh = null; // To hold the back cover object
+
+        // --- Model Parameters (scaled down 100x: 1mm = 0.01 units) ---
+        const phoneHeight = 16.2;
+        const phoneWidth = 7.51;
+        const phoneDepth = 0.865;
+        const cornerRadius = 0.4;
+
+        // --- GUI Parameters ---
+        const params = {
+            color: 'Fluid Silver',
+            view: 'Rear 3/4 View',
+            backCover: 'None'
+        };
+
+        const views = {
+            'Front View': () => snapCamera(0, 0, 25),
+            'Rear 3/4 View': () => snapCamera(15, 10, 20),
+            'Side View': () => snapCamera(25, 0, 0)
+        };
+
+        init();
+
+        function init() {
+            // --- Basic Scene Setup ---
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2; // Increase exposure for brighter scene
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            // Add a gradient background
+            scene.background = new THREE.Color(0x2a2a2a);
+
+            textureLoader = new THREE.TextureLoader();
+
+            // --- Lighting Setup ---
+            // Ambient light for overall scene brightness
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            // Main key light (bright, from top-right-front)
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            keyLight.position.set(10, 15, 10);
+            scene.add(keyLight);
+
+            // Fill light (softer, from left side to fill shadows)
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            fillLight.position.set(-10, 5, 5);
+            scene.add(fillLight);
+
+            // Back light (rim light from behind to separate object from background)
+            const backLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            backLight.position.set(0, 5, -10);
+            scene.add(backLight);
+
+            // Hemisphere light for natural sky/ground color bounce
+            const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+            scene.add(hemisphereLight);
+
+            // Spotlight for dramatic highlight on the phone
+            const spotLight = new THREE.SpotLight(0xffffff, 1.0);
+            spotLight.position.set(15, 20, 15);
+            spotLight.angle = Math.PI / 6;
+            spotLight.penumbra = 0.3;
+            spotLight.decay = 2;
+            spotLight.distance = 100;
+            scene.add(spotLight);
+
+            // --- Controls ---
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 10;
+            controls.maxDistance = 50;
+            controls.target.set(0, 0, 0);
+
+            // --- Texture Generation ---
+            // All textures are now generated programmatically.
+
+            const promises = [
+                new Promise((resolve, reject) => new RGBELoader()
+                    .load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/equirectangular/venice_sunset_1k.hdr', (texture) => {
+                        texture.mapping = THREE.EquirectangularReflectionMapping;
+                        scene.environment = texture;
+                        resolve();
+                    },
+                        undefined, // onProgress
+                        (err) => {
+                            // Fallback: continue without HDR environment
+                            resolve(); // Resolve instead of reject to continue loading
+                        }
+                    ))
+            ];
+
+            // Generate back textures using Canvas and load them
+            promises.push(createScreenTexture().then(texture => materials.screenTexture = texture));
+            promises.push(createBackTexture('silver').then(texture => materials.backTextureSilver = texture));
+            promises.push(createBackTexture('green').then(texture => materials.backTextureGreen = texture));
+            promises.push(createBackTexture('purple').then(texture => materials.backTexturePurple = texture));
+
+            // Generate mirror panel texture with "realme" text
+            promises.push(createMirrorPanelTexture().then(texture => materials.mirrorPanelTexture = texture));
+
+            Promise.all(promises).then(() => {
+                // Hide loader
+                document.getElementById('loader').style.display = 'none';
+
+                // --- Create Materials (after textures & env map are loaded) ---
+                createMaterials();
+
+                // --- Create Phone Model ---
+                phoneGroup = createPhone();
+                scene.add(phoneGroup);
+
+                // --- Setup GUI ---
+                setupGUI();
+
+                // --- Initial View ---
+                views['Rear 3/4 View']();
+
+                // --- Start Animation Loop ---
+                animate();
+            }).catch(err => {
+                console.error("Error loading textures:", err);
+                document.getElementById('loader').textContent = 'Error loading textures. Please try refreshing.';
+            });
+
+            // Handle window resizing
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // FIX: New function to programmatically create a valid screen texture
+        function createScreenTexture() {
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 1080;
+                canvas.height = 2412;
+                const ctx = canvas.getContext('2d');
+
+                // Black background
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Placeholder text
+                ctx.font = 'bold 90px Inter, sans-serif';
+                ctx.fillStyle = '#555555';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('', canvas.width / 2, canvas.height / 2);
+
+                // --- ADD PUNCH-HOLE CAMERA ---
+                // Draw a black circle at the top-center
+                const punchHoleX = canvas.width / 2;
+                const punchHoleY = canvas.height * 0.05; // 5% from top
+                const punchHoleRadius = 20; // pixels
+
+                ctx.beginPath();
+                ctx.arc(punchHoleX, punchHoleY, punchHoleRadius, 0, Math.PI * 2);
+                ctx.fillStyle = '#000000'; // Pure black for the hole
+                ctx.fill();
+                // --- End Punch-Hole ---
+
+                const texture = textureLoader.load(canvas.toDataURL());
+                texture.colorSpace = THREE.SRGBColorSpace;
+                resolve(texture);
+            });
+        }
+
+        // Function to create mirror panel texture with "realme" text
+        function createMirrorPanelTexture(config = {}) {
+            // Default configuration
+            const defaults = {
+                topText: {
+                    text: '50 MP',
+                    x: 0.5,
+                    y: 0.80,
+                    rotation: 90, // in degrees
+                    fontSize: 25,
+                    color: '#666666'
+                },
+                secondaryText: {
+                    text: 'AI CAMOIS',
+                    x: 0.47,
+                    y: 0.80,
+                    rotation: 90, // in degrees
+                    fontSize: 14,
+                    color: '#888888'
+                }
+            };
+
+            // Merge config with defaults
+            const topText = { ...defaults.topText, ...config.topText };
+            const secondaryText = { ...defaults.secondaryText, ...config.secondaryText };
+
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 600;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+
+                // Silver/mirror background
+                ctx.fillStyle = '#e8e8e8';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw top text with rotation (plain text, no shadow effects)
+                ctx.save();
+                ctx.translate(canvas.width * topText.x, canvas.height * topText.y);
+                ctx.rotate((topText.rotation * Math.PI) / 180);
+                ctx.font = `bold ${topText.fontSize}px Arial, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                // Plain text only
+                ctx.fillStyle = topText.color;
+                ctx.fillText(topText.text, 0, 0);
+                ctx.restore();
+
+                // Draw secondary text with rotation and punched/embossed silver effect
+                ctx.save();
+                ctx.translate(canvas.width * secondaryText.x, canvas.height * secondaryText.y);
+                ctx.rotate((secondaryText.rotation * Math.PI) / 180);
+                ctx.font = `${secondaryText.fontSize}px Arial, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                // Embossed/punched silver effect - shadow first (darker)
+                ctx.fillStyle = '#b8b8b8';
+                ctx.fillText(secondaryText.text, 1, 1);
+
+                // Highlight (lighter)
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(secondaryText.text, -1, -1);
+
+                // Main text (medium silver)
+                ctx.fillStyle = secondaryText.color;
+                ctx.fillText(secondaryText.text, 0, 0);
+                ctx.restore();
+
+                const texture = textureLoader.load(canvas.toDataURL());
+                texture.colorSpace = THREE.SRGBColorSpace;
+                resolve(texture);
+            });
+        }
+
+        // Function to create back panel texture dynamically
+        function createBackTexture(colorVariant, config = {}) {
+            // Default configuration for realme text
+            const defaults = {
+                realmeText: {
+                    text: 'realme',
+                    x: 0.15,
+                    y: 0.85,
+                    rotation: - 90, // in degrees
+                    fontSize: 80,
+
+                }
+            };
+
+            const realmeText = { ...defaults.realmeText, ...config.realmeText };
+
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 1024; // Resolution for the texture
+                canvas.height = 2048;
+                const ctx = canvas.getContext('2d');
+
+                // Define colors
+                let topColor, bottomColor, textColor;
+                if (colorVariant === 'silver') {
+                    topColor = '#e0e0e0'; // Lighter silver for mirror
+                    bottomColor = '#e0e0e0'; // Slightly darker silver for matte
+                    textColor = '#444444'; // Darker text for contrast
+                } else if (colorVariant === 'green') {
+                    topColor = '#3a4a40'; // Darker green for mirror
+                    bottomColor = '#3a4a40'; // Even darker green for matte
+                    textColor = '#ffffff'; // White text for contrast
+                } else { // purple
+                    topColor = '#a88ac8'; // Brighter purple gradient top
+                    bottomColor = '#a88ac8'; // Medium purple for matte
+                    textColor = '#e0d0f0'; // Light purple/lavender text
+                }
+
+                // Use custom color if provided, otherwise use default
+                const finalTextColor = realmeText.color || textColor;
+
+                // Draw the top mirror section (approx 40% height)
+                const mirrorHeight = canvas.height * 0.45; // Adjusted height for mirror part
+
+                // For purple variant, create a gradient effect
+                if (colorVariant === 'purple') {
+                    // Mirror section gradient (top) - brighter colors
+                    const mirrorGradient = ctx.createLinearGradient(0, 0, canvas.width, mirrorHeight);
+                    mirrorGradient.addColorStop(0, '#a88ac8');    // Very light purple-pink
+                    mirrorGradient.addColorStop(0.5, '#a88ac8');  // Mid-bright purple
+                    mirrorGradient.addColorStop(1, '#a88ac8');    // Medium purple
+                    ctx.fillStyle = mirrorGradient;
+                    ctx.fillRect(0, 0, canvas.width, mirrorHeight);
+
+                    // Matte section gradient (bottom) - still visible
+                    const matteGradient = ctx.createLinearGradient(0, mirrorHeight, canvas.width, canvas.height);
+                    matteGradient.addColorStop(0, '#a88ac8');     // Medium purple
+                    matteGradient.addColorStop(0.5, '#a88ac8');   // Darker purple
+                    matteGradient.addColorStop(1, '#a88ac8');     // Deep purple (still visible)
+                    ctx.fillStyle = matteGradient;
+                    ctx.fillRect(0, mirrorHeight, canvas.width, canvas.height - mirrorHeight);
+                } else {
+                    // Solid colors for silver and green
+                    ctx.fillStyle = topColor;
+                    ctx.fillRect(0, 0, canvas.width, mirrorHeight);
+
+                    ctx.fillStyle = bottomColor;
+                    ctx.fillRect(0, mirrorHeight, canvas.width, canvas.height - mirrorHeight);
+                }
+
+                // Add "realme" branding with configurable position and style
+                ctx.save();
+                ctx.translate(canvas.width * realmeText.x, canvas.height * realmeText.y);
+                ctx.rotate((realmeText.rotation * Math.PI) / 180);
+                ctx.font = `bold ${realmeText.fontSize}px Inter, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                // Punched/embossed effect - shadow (darker, bottom-right)
+                if (colorVariant === 'silver') {
+                    ctx.fillStyle = '#888888';
+                } else if (colorVariant === 'green') {
+                    ctx.fillStyle = '#0a1a10';
+                } else { // purple
+                    ctx.fillStyle = '#d8b8f8'; // Brighter shadow for visibility
+                }
+                ctx.fillText(realmeText.text, 2, 2);
+
+                // Highlight (lighter, top-left)
+                if (colorVariant === 'silver') {
+                    ctx.fillStyle = '#e8e8e8';
+                } else if (colorVariant === 'green') {
+                    ctx.fillStyle = '#3a4a40';
+                } else { // purple
+                    ctx.fillStyle = '#d8b8f8'; // Much brighter highlight
+                }
+                ctx.fillText(realmeText.text, -2, -2);
+
+                // Main text (medium tone for punched effect)
+                if (colorVariant === 'silver') {
+                    ctx.fillStyle = '#a0a0a0';
+                } else if (colorVariant === 'green') {
+                    ctx.fillStyle = '#1a2a20';
+                } else { // purple
+                    ctx.fillStyle = '#d8b8f8'; // Medium purple for main text
+                }
+                ctx.fillText(realmeText.text, 0, 0);
+                ctx.restore();
+
+                const texture = textureLoader.load(canvas.toDataURL());
+                texture.colorSpace = THREE.SRGBColorSpace;
+                resolve(texture);
+            });
+        }
+
+        function createMaterials() {
+            // --- Shared Materials ---
+            materials.screen = new THREE.MeshStandardMaterial({
+                map: materials.screenTexture,
+                metalness: 0.0,
+                roughness: 0.1,
+                emissive: 0x000000,
+                emissiveIntensity: 0.0,
+                name: "Screen Material"
+            });
+            materials.lens = new THREE.MeshStandardMaterial({
+                color: 0x000000,
+                metalness: 0.0,
+                roughness: 0.1,
+                name: "Lens"
+            });
+            // Inner lens, slightly different properties for depth
+            materials.innerLens = new THREE.MeshStandardMaterial({
+                color: 0x111111,
+                metalness: 0.2,
+                roughness: 0.0,
+                name: "Inner Lens"
+            });
+            materials.lensRing = new THREE.MeshStandardMaterial({
+                color: 0xeeeeee, // Brighter silver for lens rings
+                metalness: 1.0,
+                roughness: 0.05,
+                name: "Lens Ring"
+            });
+            materials.flash = new THREE.MeshStandardMaterial({
+                color: 0xffffe0,
+                metalness: 0.0,
+                roughness: 0.3,
+                emissive: 0x555544,
+                emissiveIntensity: 1.0,
+                name: "Flash"
+            });
+            materials.ports = new THREE.MeshStandardMaterial({
+                color: 0x222222,
+                metalness: 0.3,
+                roughness: 0.3,
+                name: "Ports"
+            });
+            materials.antenna = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                metalness: 0.8,
+                roughness: 0.5,
+                name: "Antenna Line"
+            });
+            materials.speakerSlit = new THREE.MeshStandardMaterial({
+                color: 0x111111,
+                metalness: 0.0,
+                roughness: 0.5,
+                name: "Speaker Slit"
+            });
+            // Black glossy glass for camera module cover
+            materials.blackGlass = new THREE.MeshPhysicalMaterial({
+                color: 0x000000,
+                metalness: 0.1,
+                roughness: 0.05,
+                transmission: 0.1, // Slight transparency
+                thickness: 0.5,
+                clearcoat: 1.0, // Glossy coating
+                clearcoatRoughness: 0.05,
+                reflectivity: 0.9,
+                name: "Black Glass Cover"
+            });
+            // Transparent glossy glass for sensor module
+            materials.transparentGlass = new THREE.MeshPhysicalMaterial({
+                color: 0x000000,
+                metalness: 0.0,
+                roughness: 0.02,
+                transmission: 0.95, // High transparency
+                thickness: 0.5,
+                clearcoat: 1.0, // Glossy coating
+                clearcoatRoughness: 0.02,
+                reflectivity: 0.5,
+                ior: 1.5, // Index of refraction for glass
+                transparent: true,
+                opacity: 0.3,
+                name: "Transparent Glass Cover"
+            });
+            // Mirror finish for camera module background with texture
+            materials.mirrorFinish = new THREE.MeshStandardMaterial({
+                map: materials.mirrorPanelTexture,
+                color: 0xffffff,
+                metalness: 1.0,
+                roughness: 0.05, // Very smooth and reflective
+                name: "Mirror Finish"
+            });
+
+            // --- Custom Back Panel Shader Material ---
+            materials.backShaderMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    tDiffuse: { value: materials.backTextureSilver },
+                    colorTint: { value: new THREE.Color(0xffffff) }, // White for silver, green for green
+                    envMap: { value: scene.environment } // Pass environment map to shader
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    varying vec3 vNormal;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vUv = uv;
+                        vNormal = normalize(normalMatrix * normal);
+                        vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D tDiffuse;
+                    uniform vec3 colorTint;
+                    uniform samplerCube envMap; // For reflections
+
+                    varying vec2 vUv;
+                    varying vec3 vNormal;
+                    varying vec3 vWorldPosition;
+
+                    void main() {
+                        vec4 texColor = texture2D(tDiffuse, vUv);
+
+                        // Basic environment map reflection
+                        vec3 I = normalize(vWorldPosition - cameraPosition);
+                        vec3 R = reflect(I, normalize(vNormal));
+                        vec4 envColor = textureCube(envMap, R);
+
+                        // Mix texture color with reflection based on an arbitrary 'metallic' factor from texture alpha or a fixed value
+                        // The top part of the texture (vUv.y > 0.55 in createBackTexture) is meant to be more reflective
+                        float metallicFactor = 0.8; // Default for matte part
+                        // UV mapping correction: 0,0 is bottom-left, 1,1 is top-right.
+                        // We check vUv.y against the split point (0.55 for 45% mirror)
+                        if (vUv.y > (1.0 - 0.45)) { // Top 45% of the texture
+                            metallicFactor = 0.95; // More reflective for mirror part
+                        }
+
+                        vec3 finalColor = mix(texColor.rgb * colorTint, envColor.rgb, metallicFactor);
+
+                        gl_FragColor = vec4(finalColor, 1.0);
+                    }
+                `,
+                transparent: false,
+                side: THREE.FrontSide
+            });
+
+            // --- Frame Materials ---
+            materials.silver_frame = new THREE.MeshStandardMaterial({
+                color: 0xb0b0b0,
+                metalness: 1.0,
+                roughness: 0.3, // Matte metal
+                name: "Silver Frame"
+            });
+            materials.green_frame = new THREE.MeshStandardMaterial({
+                color: 0x2a403a,
+                metalness: 1.0,
+                roughness: 0.3, // Matte metal
+                name: "Green Frame"
+            });
+            materials.purple_frame = new THREE.MeshStandardMaterial({
+                color: 0xa88ac8, // Much brighter purple to match gradient
+                metalness: 1.0,
+                roughness: 0.3, // Matte metal
+                name: "Purple Frame"
+            });
+
+            // --- Back Cover Materials ---
+            materials.clearCase = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                metalness: 0.0,
+                roughness: 0.1,
+                transmission: 0.9,
+                thickness: 0.5,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1,
+                transparent: true,
+                opacity: 0.3,
+                ior: 1.5,
+                name: "Clear Case"
+            });
+
+            materials.blackCase = new THREE.MeshStandardMaterial({
+                color: 0x1a1a1a,
+                metalness: 0.1,
+                roughness: 0.6,
+                name: "Black Silicone Case"
+            });
+
+            materials.carbonFiberCase = new THREE.MeshStandardMaterial({
+                color: 0x2a2a2a,
+                metalness: 0.3,
+                roughness: 0.4,
+                name: "Carbon Fiber Case"
+            });
+
+            materials.leatherCase = new THREE.MeshStandardMaterial({
+                color: 0x4a3428,
+                metalness: 0.0,
+                roughness: 0.8,
+                name: "Leather Case"
+            });
+
+            materials.transparentBlueCase = new THREE.MeshPhysicalMaterial({
+                color: 0x4488ff,
+                metalness: 0.0,
+                roughness: 0.2,
+                transmission: 0.7,
+                thickness: 0.5,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1,
+                transparent: true,
+                opacity: 0.5,
+                ior: 1.5,
+                name: "Transparent Blue Case"
+            });
+
+            materials.rugged = new THREE.MeshStandardMaterial({
+                color: 0x3a3a3a,
+                metalness: 0.2,
+                roughness: 0.9,
+                name: "Rugged Case"
+            });
+        }
+
+        function createPhone() {
+            phoneGroup = new THREE.Group();
+
+            // --- Main Body / Frame ---
+            // Create a material for the back with the realme text texture
+            const backMaterial = new THREE.MeshStandardMaterial({
+                map: materials.backTextureSilver,
+                metalness: 0.8,
+                roughness: 0.3,
+                name: "Back Panel with Text"
+            });
+
+            materials.phoneBodyMaterials = [
+                materials.silver_frame, // right
+                materials.silver_frame, // left
+                materials.silver_frame, // top
+                materials.silver_frame, // bottom
+                materials.screen,       // front
+                backMaterial            // back - with realme text texture
+            ];
+
+            const bodyGeom = new RoundedBoxGeometry(phoneWidth, phoneHeight, phoneDepth, 8, cornerRadius);
+            const body = new THREE.Mesh(bodyGeom, materials.phoneBodyMaterials);
+            body.name = "PhoneBody";
+            phoneGroup.add(body);
+
+            // --- Rear Camera Module (on the back panel) ---
+            const cameraGroup = createCameraModule();
+            cameraGroup.position.set(phoneWidth * 0.22, phoneHeight * 0.30, -phoneDepth / 2); // Adjusted X for left-side
+            cameraGroup.rotation.z = -Math.PI / 2; // Slight angle for realism
+            phoneGroup.add(cameraGroup);
+
+            // --- Side Buttons (Right Side) ---
+            const buttonDepth = 0.05;
+            const buttonWidth = 0.2;
+            const buttonZOffset = 0;
+            const buttonX = phoneWidth / 2;
+
+            const powerGeom = new RoundedBoxGeometry(buttonDepth, 0.8, buttonWidth, 2, 0.05);
+            const powerButton = new THREE.Mesh(powerGeom, materials.silver_frame);
+            powerButton.name = "PowerButton";
+            powerButton.position.set(buttonX, 2, buttonZOffset);
+            phoneGroup.add(powerButton);
+
+            const volGeom = new RoundedBoxGeometry(buttonDepth, 1.8, buttonWidth, 2, 0.05);
+            const volButton = new THREE.Mesh(volGeom, materials.silver_frame);
+            volButton.name = "VolumeButton";
+            volButton.position.set(buttonX, 4, buttonZOffset);
+            phoneGroup.add(volButton);
+
+            // --- Bottom Ports (matching reference image) ---
+            const bottomY = -phoneHeight / 2;
+
+            // From left to right based on the reference image:
+
+            // 1. SIM Card Tray (far left) - horizontal elongated slot matching body color
+            const simTrayGeom = new RoundedBoxGeometry(1.3, 0.045, 0.13, 8, 0.0225);
+            const simTray = new THREE.Mesh(simTrayGeom, materials.silver_frame); // Uses frame material
+            simTray.name = "SIMTray";
+            simTray.position.set(-2.5, bottomY, 0);
+            phoneGroup.add(simTray);
+
+            // SIM Tray ejector pin hole (realistic hole with visible depth on left side of tray)
+            const ejectorHoleGroup = new THREE.Group();
+
+            // Outer rim/ring (same color as frame)
+            const rimGeom = new THREE.TorusGeometry(0.035, 0.008, 8, 24);
+            const rim = new THREE.Mesh(rimGeom, materials.silver_frame);
+            rim.name = "EjectorRim"; // Name it so we can update its color
+            ejectorHoleGroup.add(rim);
+
+            // Inner dark hole (recessed)
+            const holeGeom = new THREE.CylinderGeometry(0.027, 0.027, 0.16, 16);
+            const hole = new THREE.Mesh(holeGeom, materials.ports);
+            hole.rotation.x = Math.PI / 2;
+            ejectorHoleGroup.add(hole);
+
+            ejectorHoleGroup.position.set(-3.05, -8.05, 0); // Left edge of SIM tray
+            ejectorHoleGroup.rotation.x = Math.PI / 2
+            phoneGroup.add(ejectorHoleGroup);
+
+            // 2. Small dot/hole (microphone or sensor)
+            const dot1Geom = new THREE.CylinderGeometry(0.035, 0.035, 0.2, 20);
+            const dot1 = new THREE.Mesh(dot1Geom, materials.ports);
+            dot1.rotation.x = 0;
+            dot1.position.set(-1.0, -8.001, 0);
+            phoneGroup.add(dot1);
+
+            // 3. USB-C Port (center) - dark elongated oval/pill shape
+            const usbCWidth = 0.75;
+            const usbCHeight = 0.055;
+            const usbCDepth = 0.32;
+            const usbCGeom = new RoundedBoxGeometry(usbCWidth, usbCHeight, usbCDepth, 20, usbCHeight / 2);
+            const usbCPort = new THREE.Mesh(usbCGeom, materials.ports);
+            usbCPort.name = "USBCPort";
+            usbCPort.position.set(-0.1, bottomY, 0);
+            phoneGroup.add(usbCPort);
+
+
+
+            // 5. Speaker grille (right side) - 4 small circular dots
+            const speakerDotRadius = 0.055;
+            const speakerDotDepth = 0.2;
+            const speakerDotSpacing = 0.24;
+            const numSpeakerDots = 4;
+            const speakerStartX = 1.5;
+
+            for (let i = 0; i < numSpeakerDots; i++) {
+                const dotGeom = new THREE.CylinderGeometry(speakerDotRadius, speakerDotRadius, speakerDotDepth, 20);
+                const dot = new THREE.Mesh(dotGeom, materials.speakerSlit);
+                dot.rotation.x = Math.PI / 2;
+                dot.position.set(speakerStartX + (i * speakerDotSpacing), bottomY, 0);
+                phoneGroup.add(dot);
+            }
+
+            // --- Top of Phone: Two holes and one small oval ---
+            const topY = phoneHeight / 2;
+
+            // Hole 1 - Left hole (microphone)
+            const topHole1Geom = new THREE.CylinderGeometry(0.06, 0.06, 0.2, 20);
+            const topHole1 = new THREE.Mesh(topHole1Geom, materials.ports);
+            topHole1.rotation.x = 0;
+            topHole1.position.set(1.9, topY - 0.09, 0);
+            phoneGroup.add(topHole1);
+
+            // Hole 2 - Right hole (microphone)
+            const topHole2Geom = new THREE.CylinderGeometry(0.04, 0.04, 0.2, 20);
+            const topHole2 = new THREE.Mesh(topHole2Geom, materials.ports);
+            topHole2.rotation.x = 0;
+            topHole2.position.set(2.5, topY - 0.09, 0);
+            phoneGroup.add(topHole2);
+
+            // Small oval shape in the center (speaker or sensor)
+            const ovalWidth = 0.1;
+            const ovalHeight = 0.001;
+            const ovalDepth = 0.2;
+            const ovalGeom = new RoundedBoxGeometry(ovalWidth, ovalHeight, ovalDepth, 20, ovalHeight / 2);
+            const ovalShape = new THREE.Mesh(ovalGeom, materials.ports);
+            ovalShape.position.set(-0.8, topY, 0);
+            ovalShape.rotation.y = Math.PI / 2  // Rotate 90 degrees
+            phoneGroup.add(ovalShape);
+
+            return phoneGroup;
+        }
+
+        function createCameraModule() {
+            const group = new THREE.Group();
+            const cameraBumpHeight = - 0.01; // Increased bump
+            const lensRadius = 0.8; // Increased lens size
+            const lensSeparation = 2.2; // Increased separation
+
+            // Mirror finish panel background
+            const mirrorPanelWidth = 4.5;
+            const mirrorPanelHeight = 6.8;
+            const mirrorPanelDepth = 0.05;
+            const mirrorPanelGeom = new RoundedBoxGeometry(mirrorPanelWidth, mirrorPanelHeight, mirrorPanelDepth, 8, 0.3);
+            const mirrorPanel = new THREE.Mesh(mirrorPanelGeom, materials.mirrorFinish);
+            mirrorPanel.position.set(0, -1.6, 0.02); // Slightly recessed behind lenses
+            group.add(mirrorPanel);
+
+            // Main Lens
+            group.add(createCameraLens(-lensSeparation / 2, 0.5, lensRadius, cameraBumpHeight));
+            // Ultra-Wide Lens
+            group.add(createCameraLens(lensSeparation / 2, 0.5, lensRadius, cameraBumpHeight));
+
+            //sensor
+            group.add(sensor(lensSeparation / 2, 0.5, lensRadius, cameraBumpHeight));
+
+            return group;
+        }
+
+
+
+        function createCameraLens(x, y, radius, depth) {
+            const lensGroup = new THREE.Group();
+
+            // Silver Ring (around the lens)
+            const ringGeom = new THREE.TorusGeometry(radius, 0.1, 16, 64); // Thicker ring
+            const ring = new THREE.Mesh(ringGeom, materials.lensRing);
+            // ring.rotation.x = Math.PI / 2;
+            ring.position.z = depth / 2;
+            lensGroup.add(ring);
+
+            // Black Lens Glass (flat surface)
+            const glassGeom = new THREE.CylinderGeometry(radius * 0.9, radius * 0.9, 0.01, 64);
+            const glass = new THREE.Mesh(glassGeom, materials.lens);
+            glass.rotation.x = Math.PI / 2;
+            glass.position.z = depth / 2 - 0.01; // Slightly recessed from ring
+            lensGroup.add(glass);
+
+            // Inner Lens (smaller sphere for reflection)
+            const innerLensGeom = new THREE.SphereGeometry(radius * 0.2, 32, 32);
+            const innerLens = new THREE.Mesh(innerLensGeom, materials.innerLens);
+            innerLens.position.z = depth / 2 - 0.05; // Recessed further
+            lensGroup.add(innerLens);
+
+            // Glossy black glass cover on top
+            const glassCoverGeom = new THREE.CylinderGeometry(radius * 1.05, radius * 1.05, 0.02, 64);
+            const glassCover = new THREE.Mesh(glassCoverGeom, materials.blackGlass);
+            glassCover.rotation.x = Math.PI / 2;
+            glassCover.position.z = depth / 2 - 0.1; // On top of the lens
+            lensGroup.add(glassCover);
+
+            lensGroup.position.set(x, y, depth / 2); // Position lens group slightly forward
+            return lensGroup;
+        }
+        function sensor(x, y, radius, depth) {
+            const lensGroup = new THREE.Group();
+
+            // Silver Ring (around the lens)
+            const ringGeom = new THREE.TorusGeometry(0.7, 0.05, 16, 64); // Thinner ring
+            const ring = new THREE.Mesh(ringGeom, materials.lensRing);
+            // ring.rotation.x = Math.PI / 2;
+            ring.position.z = depth / 2;
+            lensGroup.add(ring);
+
+            // Black Lens Glass (flat surface)
+            const glassGeom = new THREE.CylinderGeometry(radius * 0.9, radius * 0.9, 0.01, 64);
+            const glass = new THREE.Mesh(glassGeom, materials.lens);
+            glass.rotation.x = Math.PI / 2;
+            glass.position.z = depth / 2 - 0.01; // Slightly recessed from ring
+            lensGroup.add(glass);
+
+            // Inner flash (round flat flash light)
+            const flash = new THREE.CylinderGeometry(0.15, 0.15, 0.02, 32);
+            const innerflash = new THREE.Mesh(flash, materials.flash);
+            innerflash.rotation.x = Math.PI / 2;
+            innerflash.position.z = depth / 2 - 0.071;
+            innerflash.position.x = 0.29
+            lensGroup.add(innerflash);
+
+            // Inner flash 2 (round flat flash light)
+            const flash1 = new THREE.CylinderGeometry(0.15, 0.15, 0.02, 32);
+            const innerflash1 = new THREE.Mesh(flash1, materials.flash);
+            innerflash1.rotation.x = Math.PI / 2;
+            innerflash1.position.z = depth / 2 - 0.071;
+            innerflash1.position.x = -0.29
+            lensGroup.add(innerflash1);
+
+            // Transparent glossy glass cover on top (so flashes are visible)
+            const glassCoverGeom = new THREE.CylinderGeometry(0.75, 0.75, 0.02, 64);
+            const glassCover = new THREE.Mesh(glassCoverGeom, materials.transparentGlass);
+            glassCover.rotation.x = Math.PI / 2;
+            glassCover.position.z = depth / 2 - 0.1; // On top of the sensor
+            lensGroup.add(glassCover);
+
+            lensGroup.position.set(x - 1.1, y - 1.6, depth / 2); // Position lens group slightly forward
+            return lensGroup;
+        }
+
+        function setupGUI() {
+            const gui = new GUI();
+            gui.title("Realme GT 6T Controls");
+
+            // Color Variant Selector
+            gui.add(params, 'color', ['Fluid Silver', 'Razor Green', 'Miracle Purple']).name('Color Variant').onChange(updateColors);
+
+            // View Selector
+            const viewFolder = gui.addFolder('Snap to View');
+            viewFolder.add(views, 'Front View');
+            viewFolder.add(views, 'Rear 3/4 View');
+            viewFolder.add(views, 'Side View');
+
+        }
+
+        function updateColors(value) {
+            const body = phoneGroup.getObjectByName("PhoneBody");
+            const powerButton = phoneGroup.getObjectByName("PowerButton");
+            const volButton = phoneGroup.getObjectByName("VolumeButton");
+            const simTray = phoneGroup.getObjectByName("SIMTray");
+            const ejectorRim = phoneGroup.getObjectByName("EjectorRim");
+
+            // Get the material array from the phone body
+            const bodyMaterials = body.material;
+
+            if (value === 'Fluid Silver') {
+                // Create back material with silver texture
+                const backMaterialSilver = new THREE.MeshStandardMaterial({
+                    map: materials.backTextureSilver,
+                    metalness: 0.8,
+                    roughness: 0.3,
+                    name: "Back Panel Silver with Text"
+                });
+
+                // Update all frame materials (indices 0, 1, 2, 3)
+                bodyMaterials[0] = materials.silver_frame;
+                bodyMaterials[1] = materials.silver_frame;
+                bodyMaterials[2] = materials.silver_frame;
+                bodyMaterials[3] = materials.silver_frame;
+                bodyMaterials[5] = backMaterialSilver; // back panel with texture
+
+                // Update buttons and ejector rim
+                powerButton.material = materials.silver_frame;
+                volButton.material = materials.silver_frame;
+                simTray.material = materials.silver_frame;
+                ejectorRim.material = materials.silver_frame;
+            } else if (value === 'Razor Green') {
+                // Create back material with green texture
+                const backMaterialGreen = new THREE.MeshStandardMaterial({
+                    map: materials.backTextureGreen,
+                    metalness: 0.8,
+                    roughness: 0.3,
+                    name: "Back Panel Green with Text"
+                });
+
+                // Update all frame materials (indices 0, 1, 2, 3)
+                bodyMaterials[0] = materials.green_frame;
+                bodyMaterials[1] = materials.green_frame;
+                bodyMaterials[2] = materials.green_frame;
+                bodyMaterials[3] = materials.green_frame;
+                bodyMaterials[5] = backMaterialGreen; // back panel with texture
+
+                // Update buttons and ejector rim
+                powerButton.material = materials.green_frame;
+                volButton.material = materials.green_frame;
+                simTray.material = materials.green_frame;
+                ejectorRim.material = materials.green_frame;
+            } else { // Miracle Purple
+                // Create back material with purple texture
+                const backMaterialPurple = new THREE.MeshStandardMaterial({
+                    map: materials.backTexturePurple,
+                    metalness: 0.8,
+                    roughness: 0.3,
+                    name: "Back Panel Purple with Text"
+                });
+
+                // Update all frame materials (indices 0, 1, 2, 3)
+                bodyMaterials[0] = materials.purple_frame;
+                bodyMaterials[1] = materials.purple_frame;
+                bodyMaterials[2] = materials.purple_frame;
+                bodyMaterials[3] = materials.purple_frame;
+                bodyMaterials[5] = backMaterialPurple; // back panel with texture
+
+                // Update buttons and ejector rim
+                powerButton.material = materials.purple_frame;
+                volButton.material = materials.purple_frame;
+                simTray.material = materials.purple_frame;
+                ejectorRim.material = materials.purple_frame;
+            }
+            body.material.needsUpdate = true; // Mark the material array as needing update
+        }
+
+        function snapCamera(x, y, z) {
+            // A simple spring-like animation (no external library)
+            const startPos = camera.position.clone();
+            const endPos = new THREE.Vector3(x, y, z);
+            const startTarget = controls.target.clone();
+            const endTarget = new THREE.Vector3(0, 0, 0);
+
+            let t = 0;
+            const duration = 0.5; // seconds
+            const clock = new THREE.Clock();
+
+            function animateSnap() {
+                const delta = clock.getDelta();
+                t += delta / duration;
+
+                // Ease-out function
+                const easeT = 1 - Math.pow(1 - t, 3);
+
+                if (t < 1) {
+                    camera.position.lerpVectors(startPos, endPos, easeT);
+                    controls.target.lerpVectors(startTarget, endTarget, easeT);
+                    controls.update();
+                    requestAnimationFrame(animateSnap);
+                } else {
+                    camera.position.copy(endPos);
+                    controls.target.copy(endTarget);
+                    controls.update();
+                }
+            }
+            animateSnap();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // only required if controls.enableDamping = true
+            renderer.render(scene, camera);
+        }
+
+    </script>
+</body>
+
+</html>

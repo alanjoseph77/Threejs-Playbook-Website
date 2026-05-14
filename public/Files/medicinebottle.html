@@ -1,0 +1,327 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medicine Bottle 3D</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; font-family: sans-serif; }
+        #info {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: #333;
+            pointer-events: none;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #8b4513;
+            font-size: 1.2rem;
+            font-family: monospace;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="loading">Molding Plastic...</div>
+    
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Dimensions from Blueprint ---
+        const DIMS = {
+            bottle: {
+                radiusBody: 10,   // D20
+                heightBody: 25,
+                radiusNeck: 7.5,  // D15
+                heightNeck: 5,
+                wall: 1,
+                fillet: 1
+            },
+            cap: {
+                radiusOuter: 9,   // D18
+                height: 7,
+                knurlCount: 50,
+                knurlRadius: 0.5
+            }
+        };
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(30, 40, 50);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 15, 0);
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        mainLight.position.set(20, 50, 20);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.set(1024, 1024);
+        scene.add(mainLight);
+
+        const backLight = new THREE.DirectionalLight(0xffaa00, 0.5); // Warm backlight for amber glass
+        backLight.position.set(-20, 10, -30);
+        scene.add(backLight);
+
+        // --- Textures ---
+        function createLabelTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            
+            // Transparent background
+            ctx.fillStyle = 'rgba(0,0,0,0)'; 
+            ctx.fillRect(0,0,512,256);
+            
+            // Text
+            ctx.font = 'bold 60px Arial';
+            ctx.fillStyle = '#004400'; // Dark Green text as in render
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // "Medicine"
+            ctx.fillText("Medicine", 256, 80);
+            // "Bottle"
+            ctx.fillText("Bottle", 256, 160);
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+
+        // --- Materials ---
+        const matAmber = new THREE.MeshPhysicalMaterial({
+            color: 0x8b4513,    // Saddle Brown / Amber
+            metalness: 0.1,
+            roughness: 0.2,
+            transmission: 0.6,  // Semi-transparent
+            thickness: 1.0,
+            ior: 1.5,
+            clearcoat: 1.0,
+            side: THREE.DoubleSide
+        });
+
+        const matCap = new THREE.MeshStandardMaterial({
+            color: 0x8899aa,    // Grey-ish Blue
+            roughness: 0.5,
+            metalness: 0.2
+        });
+
+        const group = new THREE.Group();
+        scene.add(group);
+
+        // --- 1. Bottle Geometry (Lathe) ---
+        // We draw the RIGHT half profile
+        const pts = [];
+        const B = DIMS.bottle;
+        
+        // Inner profile (Hollow)
+        pts.push(new THREE.Vector2(B.radiusNeck - B.wall, B.heightBody + B.heightNeck)); // Top Inner
+        pts.push(new THREE.Vector2(B.radiusNeck - B.wall, B.heightBody)); // Neck Base Inner
+        pts.push(new THREE.Vector2(B.radiusBody - B.wall, B.heightBody - B.fillet)); // Shoulder Inner
+        pts.push(new THREE.Vector2(B.radiusBody - B.wall, B.wall)); // Bottom Wall Start
+        pts.push(new THREE.Vector2(0, B.wall)); // Center Bottom Inner (floor thickness)
+        
+        // We need to close the shape properly for a solid lathe? 
+        // Or just do the outer shell and inner shell?
+        // Let's re-do path from Center Bottom OUTWARDS
+        
+        const lathePts = [];
+        // Start center bottom (0,0)
+        lathePts.push(new THREE.Vector2(0, 0));
+        // Base R1 fillet start
+        lathePts.push(new THREE.Vector2(B.radiusBody - B.fillet, 0));
+        // Base R1 fillet curve approximation? Or just simple chamfer for now
+        // Let's use Path to generate smooth curve points
+        const path = new THREE.Path();
+        path.moveTo(0, 0);
+        path.lineTo(B.radiusBody - B.fillet, 0);
+        path.quadraticCurveTo(B.radiusBody, 0, B.radiusBody, B.fillet); // R1 Fillet Base
+        
+        // Vertical Body
+        path.lineTo(B.radiusBody, B.heightBody - B.fillet);
+        
+        // Shoulder R1 Fillet
+        // Transition from R10 to R7.5
+        // S shape? No, usually a radius in.
+        // Blueprint R1 points to the corner.
+        path.quadraticCurveTo(B.radiusBody, B.heightBody, B.radiusBody - B.fillet, B.heightBody); // Corner round
+        // Wait, Neck is R7.5. Body is R10.
+        // We need to go from X=10 to X=7.5.
+        // At Height=25.
+        // Simple line to neck?
+        path.lineTo(B.radiusNeck + B.fillet, B.heightBody);
+        path.quadraticCurveTo(B.radiusNeck, B.heightBody, B.radiusNeck, B.heightBody + B.fillet); // Neck Fillet
+        
+        // Neck Vertical
+        path.lineTo(B.radiusNeck, B.heightBody + B.heightNeck);
+        
+        // Lip/Thickness
+        path.lineTo(B.radiusNeck - B.wall, B.heightBody + B.heightNeck);
+        
+        // Inner Wall (Simplified down)
+        path.lineTo(B.radiusNeck - B.wall, B.wall); // Down neck & body
+        path.lineTo(0, B.wall); // Inner floor
+        
+        const geometryBottle = new THREE.LatheGeometry(path.getPoints(40), 64);
+        const bottle = new THREE.Mesh(geometryBottle, matAmber);
+        bottle.castShadow = true;
+        bottle.receiveShadow = true;
+        group.add(bottle);
+
+        // Label Mesh (Cylinder wrapped around)
+        const labelGeo = new THREE.CylinderGeometry(B.radiusBody + 0.05, B.radiusBody + 0.05, 15, 64, 1, true);
+        const labelMat = new THREE.MeshBasicMaterial({
+            map: createLabelTexture(),
+            transparent: true,
+            opacity: 0.9,
+            side: THREE.DoubleSide
+        });
+        const label = new THREE.Mesh(labelGeo, labelMat);
+        label.position.y = 12.5; // Mid body
+        label.rotation.y = -Math.PI / 2; // Center text
+        group.add(label);
+
+
+        // --- 2. Cap Geometry (Custom Shape Extrusion) ---
+        const C = DIMS.cap;
+        
+        const capShape = new THREE.Shape();
+        
+        // We need to generate the "gear" profile.
+        // 50 bumps.
+        // Center Radius approx 8.5 (since bumps add 0.5 to reach 9.0 outer).
+        const baseR = C.radiusOuter - C.knurlRadius; 
+        const steps = C.knurlCount;
+        
+        for (let i = 0; i < steps; i++) {
+            const angle = (i / steps) * Math.PI * 2;
+            const nextAngle = ((i + 1) / steps) * Math.PI * 2;
+            
+            // Center of the bump
+            const bumpCx = Math.cos(angle) * baseR;
+            const bumpCy = Math.sin(angle) * baseR;
+            
+            // We want a semicircle sticking OUT.
+            // We need to connect the previous point to the start of this semicircle?
+            // Actually, absarc works well.
+            // If we just place circles, they might not connect.
+            // Let's calculate start and end points on the base circle.
+            // But 50 bumps on ~53mm circumference means ~1mm spacing.
+            // The bump diameter is 1mm (R0.5). So they touch perfectly.
+            
+            if (i === 0) {
+                capShape.moveTo(
+                    Math.cos(angle - 0.01) * baseR, 
+                    Math.sin(angle - 0.01) * baseR
+                ); 
+            }
+            
+            // Draw the bump
+            // Tangent logic is hard, let's just place the arc centered at bumpCx, bumpCy
+            // We want the outer half.
+            // Angle of center is 'angle'.
+            // Arc from angle - PI/2 to angle + PI/2 ?
+            capShape.absarc(bumpCx, bumpCy, C.knurlRadius, angle - Math.PI/2, angle + Math.PI/2, false);
+        }
+        
+        // Inner hole for cap
+        const holePath = new THREE.Path();
+        holePath.absarc(0, 0, DIMS.bottle.radiusNeck + 0.2, 0, Math.PI * 2, true); // +Tolerance
+        capShape.holes.push(holePath);
+
+        const extrudeSettings = {
+            depth: C.height - 1, // Subtract top thickness
+            bevelEnabled: true,
+            bevelThickness: 0.2,
+            bevelSize: 0.1,
+            bevelSegments: 2
+        };
+
+        const capGeo = new THREE.ExtrudeGeometry(capShape, extrudeSettings);
+        const cap = new THREE.Mesh(capGeo, matCap);
+        
+        // Position Cap
+        // Extrude is Z-up. Rotate to Y-up.
+        cap.rotation.x = -Math.PI / 2;
+        // Cap sits on shoulder or screwed down?
+        // Neck height is 5.
+        // Let's put it on the bottle, slightly above shoulder.
+        cap.position.y = B.heightBody + 1; 
+        
+        // Add Top Surface of Cap (Solid Cylinder to close it)
+        const capTopGeo = new THREE.CylinderGeometry(C.radiusOuter, C.radiusOuter, 1, 50);
+        const capTop = new THREE.Mesh(capTopGeo, matCap);
+        capTop.position.y = C.height; // Relative to cap group? No, absolute.
+        // Cap mesh bottom is at Y=26. Height is 6. Top is at 32.
+        // Cylinder height 1.
+        capTop.position.y = B.heightBody + 1 + C.height - 0.5;
+        
+        const capGroup = new THREE.Group();
+        capGroup.add(cap);
+        capGroup.add(capTop);
+        
+        group.add(capGroup);
+
+        // Floor Shadow
+        const shadowPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(100, 100),
+            new THREE.ShadowMaterial({ opacity: 0.1 })
+        );
+        shadowPlane.rotation.x = -Math.PI / 2;
+        shadowPlane.receiveShadow = true;
+        group.add(shadowPlane);
+
+        // --- Animation ---
+        document.getElementById('loading').style.display = 'none';
+
+        function animate() {
+            requestAnimationFrame(animate);
+            group.rotation.y += 0.005;
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>

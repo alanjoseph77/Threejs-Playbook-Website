@@ -1,0 +1,253 @@
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>90° Flanged Elbow - Studio Render</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: #888;
+            font-family: 'Segoe UI', sans-serif;
+            pointer-events: none;
+            letter-spacing: 2px;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+    </style>
+    <!-- Import Three.js and Environment Addons -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+<div id="info">Industrial Cast Iron Elbow<br></div>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+    // --- DIMENSIONS (mm) ---
+    const DIMS = {
+        bendRadius: 260,
+        pipeOD: 290,
+        pipeID: 210,
+        flangeSize: 360,
+        flangeThick: 50,
+        centerToFace: 360,
+        straightLen: 100, // 360 - 260
+        boltSpacing: 260,
+        boltHole: 30,
+        fillet: 20
+    };
+
+    // --- SCENE & RENDERER ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x151515); // Dark studio background
+    scene.fog = new THREE.Fog(0x151515, 800, 2500);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Tone mapping makes bright spots look realistic instead of white blobs
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    document.body.appendChild(renderer.domElement);
+
+    // --- ENVIRONMENT MAP (Reflections) ---
+    // This creates a fake "room" around the object for the metal to reflect
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 5000);
+    camera.position.set(800, 600, 900);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.0;
+
+    // --- PREMIUM MATERIALS ---
+    // Industrial Cast Iron
+    const matIron = new THREE.MeshPhysicalMaterial({
+        color: 0x2a2a2a,       // Dark Grey
+        metalness: 0.7,        // High metal look
+        roughness: 0.5,        // Cast iron isn't mirror smooth
+        clearcoat: 0.3,        // Slight protective coating
+        clearcoatRoughness: 0.2,
+        normalScale: new THREE.Vector2(1, 1),
+    });
+
+    const matMachinedFace = new THREE.MeshPhysicalMaterial({
+        color: 0x888888,       // Lighter steel color
+        metalness: 0.9,        // Very metallic
+        roughness: 0.3,        // Smoother (machined)
+        clearcoat: 0.5,
+    });
+
+    const matInside = new THREE.MeshStandardMaterial({
+        color: 0x111111,
+        roughness: 0.9,
+        side: THREE.BackSide
+    });
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    // --- GEOMETRY ---
+
+    // 1. Pipe Body
+    class ElbowCurve extends THREE.Curve {
+        constructor() { super(); this.radius = DIMS.bendRadius; this.straight = DIMS.straightLen; }
+        getPoint(t) {
+            const arcLen = (Math.PI / 2) * this.radius;
+            const totalLen = (2 * this.straight) + arcLen;
+            const dist = t * totalLen;
+
+            if (dist < this.straight) {
+                return new THREE.Vector3(-this.radius, this.straight - dist, 0);
+            } else if (dist < (this.straight + arcLen)) {
+                const angle = ((dist - this.straight) / arcLen) * (Math.PI / 2);
+                return new THREE.Vector3( -this.radius * Math.cos(angle), -this.radius * Math.sin(angle), 0 );
+            } else {
+                return new THREE.Vector3((dist - (this.straight + arcLen)), -this.radius, 0);
+            }
+        }
+    }
+
+    const path = new ElbowCurve();
+    // High res segments (128) for smooth curve
+    const tubeGeo = new THREE.TubeGeometry(path, 128, DIMS.pipeOD / 2, 64, false);
+    const tube = new THREE.Mesh(tubeGeo, matIron);
+    tube.castShadow = true;
+    tube.receiveShadow = true;
+    group.add(tube);
+
+    const innerGeo = new THREE.TubeGeometry(path, 64, DIMS.pipeID / 2, 32, false);
+    const inner = new THREE.Mesh(innerGeo, matInside);
+    group.add(inner);
+
+    // 2. Flanges
+    function createFlange(isMachined) {
+        const shape = new THREE.Shape();
+        const s = DIMS.flangeSize / 2;
+        const r = DIMS.fillet;
+        
+        shape.moveTo(-s, s-r); shape.lineTo(-s, -s+r); shape.quadraticCurveTo(-s, -s, -s+r, -s);
+        shape.lineTo(s-r, -s); shape.quadraticCurveTo(s, -s, s, -s+r); shape.lineTo(s, s-r);
+        shape.quadraticCurveTo(s, s, s-r, s); shape.lineTo(-s+r, s); shape.quadraticCurveTo(-s, s, -s, s-r);
+
+        const bore = new THREE.Path();
+        bore.absarc(0, 0, DIMS.pipeID / 2, 0, Math.PI*2, true);
+        shape.holes.push(bore);
+
+        const hOff = DIMS.boltSpacing/2;
+        const hR = DIMS.boltHole/2;
+        [[hOff, hOff], [-hOff, hOff], [hOff, -hOff], [-hOff, -hOff]].forEach(pos => {
+            const hole = new THREE.Path();
+            hole.absarc(pos[0], pos[1], hR, 0, Math.PI*2, true);
+            shape.holes.push(hole);
+        });
+
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: DIMS.flangeThick, bevelEnabled: true, bevelThickness: 3, bevelSize: 3, bevelSegments: 5, curveSegments: 32 });
+        geo.translate(0, 0, -DIMS.flangeThick);
+        return new THREE.Mesh(geo, isMachined ? matMachinedFace : matIron);
+    }
+
+    const flangeTop = createFlange(true); // Machined face for connection
+    flangeTop.position.set(-DIMS.bendRadius,50, 0);
+    flangeTop.rotation.x = Math.PI / 2;
+    flangeTop.castShadow = true;
+    flangeTop.receiveShadow = true;
+    group.add(flangeTop);
+
+    const flangeRight = createFlange(true);
+    flangeRight.position.set(DIMS.straightLen + DIMS.flangeThick, -DIMS.bendRadius, 0);
+    flangeRight.rotation.y = Math.PI / 2;
+    flangeRight.castShadow = true;
+    flangeRight.receiveShadow = true;
+    group.add(flangeRight);
+
+    // Add Bolts (Visual detail)
+    const boltGeo = new THREE.CylinderGeometry(14, 14, DIMS.flangeThick + 20, 16);
+    const nutGeo = new THREE.CylinderGeometry(24, 24, 15, 6);
+    const boltMat = new THREE.MeshStandardMaterial({color: 0x333333, metalness: 0.8, roughness: 0.4});
+    
+    // Function to place bolts at flange holes
+    // (Optional detail, adds realism)
+    
+    // --- LIGHTING SETUP ---
+    
+    // 1. Key Light (Warm, bright, creates main shadows)
+    const keyLight = new THREE.DirectionalLight(0xffeedd, 2.5);
+    keyLight.position.set(300, 500, 300);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048; 
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.bias = -0.0001;
+    scene.add(keyLight);
+
+    // 2. Fill Light (Cool, soft, fills shadows)
+    const fillLight = new THREE.DirectionalLight(0xcceeff, 1.0);
+    fillLight.position.set(-300, 200, 300);
+    scene.add(fillLight);
+
+    // 3. Rim Light (Blue-ish, sharp, highlights edges from behind)
+    const rimLight = new THREE.SpotLight(0x4488ff, 10);
+    rimLight.position.set(-500, 400, -500);
+    rimLight.lookAt(0, 0, 0);
+    scene.add(rimLight);
+
+    // 4. Ground Reflection Plane
+    const planeGeo = new THREE.PlaneGeometry(2000, 2000);
+    const planeMat = new THREE.MeshPhysicalMaterial({ 
+        color: 0x111111,
+        metalness: 0.2,
+        roughness: 0.2,
+        clearcoat: 0.5
+    });
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = -DIMS.bendRadius - 300; // Floor below object
+    plane.receiveShadow = true;
+    scene.add(plane);
+
+    // Center the object
+    const box = new THREE.Box3().setFromObject(group);
+    const center = box.getCenter(new THREE.Vector3());
+    group.position.sub(center);
+
+    // --- ANIMATION ---
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+</body>
+</html>

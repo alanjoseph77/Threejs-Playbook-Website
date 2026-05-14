@@ -1,0 +1,364 @@
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ash Coffee Table 3D</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            font-family: 'Segoe UI', sans-serif;
+            color: #444;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: sans-serif;
+            font-size: 24px;
+            color: #555;
+            background: rgba(255,255,255,0.8);
+            padding: 20px;
+            border-radius: 10px;
+        }
+    </style>
+    <!-- Import Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="info">
+        <h2>Ash Coffee Table</h2>
+        
+    </div>
+    <div id="loading">Assembling Wood...</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuration ---
+        const SCALE = 0.1; // 1 unit = 10cm
+        // Table Dims: 80cm Dia -> 8.0 units
+        
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf5f5f5);
+        scene.fog = new THREE.Fog(0xf5f5f5, 10, 50);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(10, 8, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 2, 0);
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        mainLight.position.set(5, 10, 5);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        scene.add(mainLight);
+
+        const fillLight = new THREE.DirectionalLight(0xffeedd, 0.4);
+        fillLight.position.set(-5, 2, -5);
+        scene.add(fillLight);
+
+        // --- Procedural Wood Material ---
+        function createAshWoodTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            // Base Color (Light Ash/Pale Wood)
+            ctx.fillStyle = '#e3cbb0'; 
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            // Grain
+            ctx.globalAlpha = 0.15;
+            ctx.strokeStyle = '#8f6d4d';
+            
+            // Draw wavy lines
+            for(let i=0; i<60; i++) {
+                ctx.lineWidth = 1 + Math.random() * 3;
+                ctx.beginPath();
+                let x = i * 20 + Math.random() * 10;
+                ctx.moveTo(x, 0);
+                for(let y=0; y<=1024; y+=50) {
+                    x += Math.sin(y * 0.005 + i) * 5 + (Math.random()-0.5)*2;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            // Noise/Texture
+            ctx.globalAlpha = 0.05;
+            for(let i=0; i<50000; i++) {
+                const x = Math.random() * 1024;
+                const y = Math.random() * 1024;
+                ctx.fillStyle = Math.random() > 0.5 ? '#000' : '#fff';
+                ctx.fillRect(x,y,2,2);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            // tex.repeat.set(1, 1);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            return tex;
+        }
+
+        const woodTexture = createAshWoodTexture();
+        const woodMat = new THREE.MeshStandardMaterial({
+            map: woodTexture,
+            color: 0xffffff,
+            roughness: 0.5,
+            metalness: 0.05
+        });
+
+        // Darker edge material for cutouts (simulating end grain/plywood edge)
+        const woodEdgeMat = new THREE.MeshStandardMaterial({
+            color: 0x8f6d4d,
+            roughness: 0.8,
+            metalness: 0.0
+        });
+
+        // --- Geometry Construction ---
+
+        function createTable() {
+            const group = new THREE.Group();
+
+            const R = 4.0; // Radius 40cm (Dia 80)
+            const H = 4.5; // Height 45cm
+            const thick = 0.15; // Panel thickness 1.5cm
+            
+            // 1. Leg Panel Shape
+            // The panel goes from -R to +R.
+            // It has an arch at the bottom.
+            // It has tabs at the top corners that poke through the surface.
+            
+            const shape = new THREE.Shape();
+            const tabW = 0.5; // Width of the tab sticking through top
+            const tabH = 0.02; // Height sticking UP past the main surface line
+            
+            // Start Bottom Right Foot (Inner side)
+            // Arch spans from approx x=-3 to x=3
+            const footW = 1.0;
+            const archH = 2.5; 
+            
+            // Draw counter-clockwise
+            
+            // 1. Bottom Right Corner
+            shape.moveTo(R, 0);
+            
+            // 2. Right Edge up to Top
+            shape.lineTo(R, H);
+            
+            // 3. Right Tab (Top Edge)
+            // The tab is at the very edge? Plan view shows tabs at the perimeter.
+            // So tab goes from R-tabW to R.
+            shape.lineTo(R - tabW, H); 
+            shape.lineTo(R - tabW, H - tabH); // Dip down to table support level
+            // Actually, usually the leg IS the support. The tab sticks UP.
+            // Let's model the main top edge at H, and the tab goes to H+tabH.
+            
+            // Redoing path for Tab Logic:
+            // Top Main Surface is at Y = H.
+            // Tab sticks up to Y = H + 0.02.
+            
+            // Start Bottom Right Outer
+            shape.moveTo(R, 0);
+            
+            // Up to Top Right Tab
+            shape.lineTo(R, H + tabH);
+            
+            // Across Tab Top
+            shape.lineTo(R - tabW, H + tabH);
+            
+            // Down Tab Side
+            shape.lineTo(R - tabW, H);
+            
+            // Across Top Edge (under table)
+            shape.lineTo(-R + tabW, H);
+            
+            // Up Tab Side
+            shape.lineTo(-R + tabW, H + tabH);
+            
+            // Across Tab Top
+            shape.lineTo(-R, H + tabH);
+            
+            // Down Left Edge
+            shape.lineTo(-R, 0);
+            
+            // Across Left Foot
+            shape.lineTo(-R + footW, 0);
+            
+            // Arch Curve
+            // Quadratic Bezier to other foot
+            // Control point in middle, up high
+            shape.quadraticCurveTo(0, archH * 2, R - footW, 0);
+            
+            // Close shape
+            shape.lineTo(R, 0);
+
+            const extrudeSettings = {
+                steps: 1,
+                depth: thick,
+                bevelEnabled: true,
+                bevelThickness: 0.02,
+                bevelSize: 0.02,
+                bevelSegments: 3
+            };
+
+            const legGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            // Center geometry thickness
+            legGeo.translate(0, 0, -thick/2);
+            
+            // --- Create Leg 1 ---
+            const leg1 = new THREE.Mesh(legGeo, woodMat);
+            leg1.castShadow = true;
+            leg1.receiveShadow = true;
+            group.add(leg1);
+            
+            // --- Create Leg 2 (Rotated) ---
+            const leg2 = new THREE.Mesh(legGeo, woodMat);
+            leg2.rotation.y = Math.PI / 2;
+            leg2.castShadow = true;
+            leg2.receiveShadow = true;
+            group.add(leg2);
+
+            // --- Table Top ---
+            // Cylinder
+            // Sits at height H, thickness let's say 0.2
+            // It needs notches for the tabs.
+            // Instead of boolean, we can just place it. The tabs stick up through it.
+            // Radius R.
+            
+            const topThick = 0.2; // 2cm
+            // Position: Top surface aligns with the "dip" in the legs (at H).
+            // So bottom of top is at H - topThick? No, looking at drawing:
+            // The tabs are flush with surface or slightly proud.
+            // The leg shoulder supports the top.
+            // Leg shoulder is at Y=H. Tab goes to H+0.02.
+            // So table top sits on the shoulder. Bottom at Y=H. Top at Y=H+0.2?
+            // No, then tab is buried.
+            // Let's assume shoulder is at H-0.2, Tab top is at H.
+            // Adjusting...
+            
+            // Visual fix: Table top is centered at Y = H - topThick/2 + something.
+            // Let's put Table Top bottom at H - topThick.
+            // Leg shoulder is at H - topThick.
+            // Tab goes up to H.
+            
+            // Let's just create the top cylinder.
+            // If we use transparent material we'd see the intersection, but wood is opaque.
+            // Simple intersection is fine.
+            
+            const topGeo = new THREE.CylinderGeometry(R, R, topThick, 64);
+            const top = new THREE.Mesh(topGeo, woodMat);
+            
+            // Position:
+            // We drew legs with shoulder at H.
+            // We want table top surface to be at H (flush with tabs) or H+small (tabs recessed).
+            // Drawing A-A shows tabs visible.
+            // Let's put the cylinder such that its top face is at H.
+            // So center is H - topThick/2.
+            top.position.y = H - topThick/2;
+            
+            // To make it look real, the tabs stick through.
+            // Our leg mesh has shoulder at H.
+            // This implies the table sits ON TOP of H? Then tabs are invisible.
+            // Wait, the shape path:
+            // Shoulder is at H. Tab is at H+tabH.
+            // So if table sits on shoulder, its bottom is at H.
+            // Its top is at H + topThick.
+            // If topThick > tabH, tabs are hidden.
+            // If topThick == tabH, tabs are flush.
+            
+            // Let's make topThick = tabH (approx).
+            // Adjust cylinder position.
+            // Cylinder bottom at H.
+            top.position.y = H + topThick/2; 
+            
+            // But wait, the tab height I set (0.02) is tiny (2mm). Table is thicker (2cm).
+            // So the cut in the leg must be deeper.
+            // Let's just adjust the table position down so the tabs poke through.
+            // Move table down so its top surface is at H + tabH.
+            // Table top Y = H + tabH.
+            // Table center = H + tabH - topThick/2.
+            
+            top.position.y = (H + tabH) - topThick/2;
+            
+            // Also rotate texture on top to be distinct?
+            // Usually table top grain is across.
+            
+            top.castShadow = true;
+            top.receiveShadow = true;
+            group.add(top);
+
+            return group;
+        }
+
+        const table = createTable();
+        scene.add(table);
+
+        document.getElementById('loading').style.display = 'none';
+
+        // --- Environment ---
+        const floorGeo = new THREE.PlaneGeometry(20, 20);
+        const floorMat = new THREE.ShadowMaterial({ opacity: 0.15 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const grid = new THREE.GridHelper(20, 20, 0xcccccc, 0xeeeeee);
+        scene.add(grid);
+
+        // --- Animation ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>

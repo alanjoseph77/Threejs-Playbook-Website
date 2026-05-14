@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation Control Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #2a2a2a;
+            color: white;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+            padding: 0;
+            margin: 0;
+        }
+
+        .panel {
+            background: rgba(40, 40, 40, 0.9);
+            border: 2px solid #ff6b35;
+            border-radius: 10px;
+            padding: 15px;
+            backdrop-filter: blur(5px);
+            overflow-y: auto;
+        }
+
+        #threeCanvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .main-display {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 0;
+            padding: 0;
+        }
+
+        .scale-container {
+            position: relative;
+            width: 80%;
+            height: 200px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .vertical-line {
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 120px;
+            background: #ff6b35;
+        }
+
+        .pendulum-bob {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ff6b35;
+            top: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: all 0.3s ease;
+        }
+
+        .pendulum-bob.top {
+            top: -120px;
+            background: #f7931e;
+        }
+
+        .scale-bar {
+            width: 100%;
+            height: 6px;
+            background: #ccc;
+            border-radius: 3px;
+            position: relative;
+            margin: 20px 0;
+        }
+
+        .scale-marks {
+            position: relative;
+            width: 100%;
+            height: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .mark {
+            width: 2px;
+            height: 15px;
+            background: #888;
+        }
+
+        .mark.major {
+            height: 20px;
+            background: #ccc;
+        }
+
+        .scale-numbers {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .weights {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 5px;
+        }
+
+        .weight {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .weight.active {
+            background: #4CAF50;
+        }
+
+        .left-panel {
+            grid-column: 1;
+            grid-row: 1 / 3;
+        }
+
+        .right-panel {
+            grid-column: 3;
+            grid-row: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .bottom-panels {
+            grid-column: 2;
+            grid-row: 2;
+            display: flex;
+            gap: 10px;
+            height: 200px;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-title {
+            color: #ff6b35;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .info-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 5px;
+        }
+
+        .info-label {
+            color: #888;
+            font-size: 10px;
+            margin-bottom: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .enabled {
+            background: #4CAF50;
+        }
+
+        .disabled {
+            background: #f44336;
+        }
+
+        .slider-container {
+            margin: 10px 0;
+        }
+
+        .slider {
+            width: 100%;
+            height: 4px;
+            background: #444;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #ff6b35;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .graph {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 5px;
+            padding: 10px;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .graph-title {
+            color: #ff6b35;
+            font-size: 10px;
+            margin-bottom: 10px;
+        }
+
+        .grid {
+            position: absolute;
+            top: 20px;
+            left: 10px;
+            right: 10px;
+            bottom: 20px;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .graph-line {
+            position: absolute;
+            bottom: 50%;
+            left: 10px;
+            right: 10px;
+            height: 2px;
+            background: #ff6b35;
+            transform-origin: left center;
+        }
+
+        .output-panel {
+            flex: 1;
+        }
+
+        .position-panel {
+            flex: 1;
+        }
+
+        .checkbox-list {
+            margin-top: 10px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            font-size: 10px;
+        }
+
+        .checkbox {
+            width: 12px;
+            height: 12px;
+            border: 1px solid #666;
+            border-radius: 2px;
+            margin-right: 8px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .checkbox.checked {
+            background: #4CAF50;
+            border-color: #4CAF50;
+        }
+
+        .checkbox.checked::after {
+            content: '✓';
+            position: absolute;
+            top: -2px;
+            left: 1px;
+            color: white;
+            font-size: 10px;
+        }
+
+        .youtube-bar {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-size: 11px;
+            color: #ccc;
+        }
+
+        .close-btn {
+            background: #666;
+            color: white;
+            border: none;
+            padding: 2px 6px;
+            margin-left: 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+
+        .angle-display {
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .angle-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 2px;
+            margin-top: 5px;
+        }
+
+        .angle-cell {
+            width: 100%;
+            height: 15px;
+            background: #444;
+            border-radius: 2px;
+        }
+
+        .angle-cell.active {
+            background: linear-gradient(45deg, #ff6b35, #f7931e);
+        }
+
+        .curve-graph {
+            position: relative;
+            height: 120px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .curve-path {
+            position: absolute;
+            top: 20px;
+            left: 10px;
+            right: 10px;
+            bottom: 20px;
+        }
+
+        .curve-line {
+            stroke: #ff6b35;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .control-buttons {
+            margin: 10px 0;
+            display: flex;
+            gap: 5px;
+        }
+
+        .control-btn {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+
+        .control-btn:hover {
+            background: #666;
+        }
+
+        .control-btn.active {
+            background: #ff6b35;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Left Panel -->
+        <div class="panel left-panel" style="display: none;">
+            <div class="info-section">
+                <div class="info-value" id="timeValue">6.7s</div>
+                <div class="info-label">
+                    <span class="status-indicator enabled"></span>Enabled
+                </div>
+                <div class="info-label" style="margin-top: 5px;">
+                    Disturbance:<br>
+                    <span class="status-indicator" id="disturbanceStatus"></span><span id="disturbanceText">Disabled</span>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-title">Control System</div>
+                <div class="control-buttons">
+                    <button class="control-btn active" id="balanceBtn">Balance</button>
+                    <button class="control-btn" id="swingBtn">Swing Up</button>
+                </div>
+                <div class="info-label">Force: <span id="forceValue">0.0</span> N</div>
+                <div class="info-label">Pendulum 1: <span id="angle1Value">0.0</span>°</div>
+                <div class="info-label">Pendulum 2: <span id="angle2Value">0.0</span>°</div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-title">Iteration</div>
+                <div class="info-value" id="iterationValue">152</div>
+                <div class="info-label">Gravity (<span id="gravityDisplay">9.81</span>/10)</div>
+                <div class="slider-container">
+                    <input type="range" class="slider" id="gravitySlider" min="5" max="15" value="9.81" step="0.1">
+                </div>
+                <div class="info-label">Damping (<span id="dampingDisplay">0.01</span>)</div>
+                <div class="slider-container">
+                    <input type="range" class="slider" id="dampingSlider" min="0" max="0.1" step="0.001" value="0.01">
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Display -->
+        <div class="panel main-display">
+            <div id="threeCanvas"></div>
+            <div class="pendulum-bob" id="mainBob"></div>
+            <div class="pendulum-bob top" id="topBob"></div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel" style="display: none;">
+            <div class="panel angle-display">
+                <div class="info-title">Angle base: <span id="baseAngleText">-3.0</span> deg</div>
+                <div class="angle-grid" id="angleBase">
+                    <!-- Grid cells will be generated by JavaScript -->
+                </div>
+            </div>
+
+            <div class="panel angle-display">
+                <div class="info-title">Angle mid: <span id="midAngleText">357.3</span> deg</div>
+                <div class="angle-grid" id="angleMid">
+                    <!-- Grid cells will be generated by JavaScript -->
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="info-title">Angle base vs mid</div>
+                <div class="curve-graph">
+                    <svg class="curve-path" width="100%" height="100%">
+                        <path class="curve-line" d="M 10,80 Q 50,20 90,60 Q 130,100 170,40" id="curvePath"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Panels -->
+        <div class="bottom-panels" style="display: none;">
+            <div class="panel position-panel">
+                <div class="info-title">Position</div>
+                <div class="checkbox-list">
+                    <div class="checkbox-item">
+                        <div class="checkbox checked"></div>
+                        <span>Cart Position</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <div class="checkbox checked"></div>
+                        <span>Cart Velocity</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <div class="checkbox checked"></div>
+                        <span>Pendulum 1 Angle</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <div class="checkbox checked"></div>
+                        <span>Pendulum 1 Velocity</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <div class="checkbox checked"></div>
+                        <span>Pendulum 2 Angle</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <div class="checkbox checked"></div>
+                        <span>Pendulum 2 Velocity</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <div class="checkbox checked"></div>
+                        <span>Control Force</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <div class="checkbox checked"></div>
+                        <span>System Energy</span>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; font-size: 10px; color: #888;">
+                    <div>Hidden nodes: 8</div>
+                    <div>Connections: 8</div>
+                </div>
+            </div>
+
+            <div class="panel output-panel">
+                <div class="info-title">Output (Control Force)</div>
+                <div style="position: absolute; top: 15px; right: 15px; font-size: 10px;"><span id="outputValue">0.0</span> N</div>
+                <div class="graph">
+                    <div class="grid"></div>
+                    <div class="graph-line" id="outputLine"></div>
+                    <div style="position: absolute; bottom: 5px; left: 10px; font-size: 9px; color: #666;">
+                        <span style="margin-right: 20px;">-50</span>
+                        <span style="margin-right: 40px;">0</span>
+                        <span>50</span>
+                    </div>
+                    <div style="position: absolute; bottom: 5px; right: 10px; font-size: 9px; color: #666;">
+                        Time: <span id="timeDisplay">0.0s</span>
+                    </div>
+                </div>
+            </div>
+            <div id="cameraPositionDisplay"
+                style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: #0f0; padding: 10px; font-size: 12px; border-radius: 5px; z-index: 999;">
+                Camera: <span id="camPos">x: 0, y: 0, z: 0</span>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        let scene, camera, renderer;
+        let scaleGroup, tiresGroup;
+        let tires = [];
+        let scaleBar, scaleBase;
+        let numberLabels = [];
+        let isAnimating = false;
+        let animationSpeed = 1;
+        let mouseX = 0, mouseY = 0;
+        let targetRotationY = 0, targetRotationX = 0;
+        let currentRotationY = 0, currentRotationX = 0;
+        let controls;
+        let pendulumGroup, pendulumRod1, pendulumRod2, pendulumBob1, pendulumBob2;
+        let cart;
+        let time = 0;
+        const railLength = 40;
+
+        // Physics parameters
+        let gravity = 9.81;
+        let damping = 0.01;
+        
+        // Cart and pendulum parameters
+        const cartMass = 1.0;
+        const pendulum1Mass = 0.1;
+        const pendulum2Mass = 0.1;
+        const pendulum1Length = 6.0;
+        const pendulum2Length = 4.5;
+        
+        // State variables [x, x_dot, theta1, theta1_dot, theta2, theta2_dot]
+        let state = [0, 0, Math.PI + 0.1, 0, Math.PI - 0.1, 0]; // Start slightly off balance
+        let controlForce = 0;
+        let controlMode = 'balance'; // 'balance' or 'swing'
+        
+        // Control gains (PID controller)
+        const K_balance = [-1.0, -1.5, 40.0, 5.0, 15.0, 2.0]; // Cart pos, vel, pend1 angle, vel, pend2 angle, vel
+        const K_swing = [-0.5, -0.8, -10.0, -2.0, -5.0, -1.0];
+
+        // Materials
+        const rectangleMaterial1 = new THREE.MeshPhongMaterial({ color: 0x3498db, specular: 0xFFFFFF, shininess: 120 });
+        const rectangleMaterial2 = new THREE.MeshLambertMaterial({ color: 0xe74c3c });
+        const rectangleMaterial3 = new THREE.MeshLambertMaterial({ color: 0x2ecc71 });
+        const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
+        const rimMaterial = new THREE.MeshLambertMaterial({ color: 0x95a5a6 });
+        const railMaterial = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+        const trackMaterial = new THREE.MeshLambertMaterial({ color: 0x696969 });
+        const pendulumMaterial = new THREE.MeshPhongMaterial({ color: 0xff6b35, shininess: 100 });
+        const bobMaterial = new THREE.MeshPhongMaterial({ color: 0xf7931e, shininess: 120 });
+
+        function initThreeScene() {
+            // Basic scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x2a2a2a);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, threeCanvas.clientWidth / threeCanvas.clientHeight, 0.1, 1000);
+            camera.position.set(0, 8.79, 26.37);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            threeCanvas.appendChild(renderer.domElement);
+            renderer.setSize(threeCanvas.clientWidth, threeCanvas.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Simple camera controls
+            controls = {
+                enableDamping: true,
+                dampingFactor: 0.05,
+                enableZoom: true,
+                zoomSpeed: 0.5,
+                rotateSpeed: 0.6,
+                target: new THREE.Vector3(0, 3, 0),
+                update: function() {
+                    // Simple orbit around target
+                    camera.lookAt(this.target);
+                }
+            };
+            
+            // Mouse controls for camera
+            let isMouseDown = false;
+            let mouseStartX = 0, mouseStartY = 0;
+            let cameraRadius = camera.position.distanceTo(controls.target);
+            let cameraTheta = Math.atan2(camera.position.z, camera.position.x);
+            let cameraPhi = Math.acos(camera.position.y / cameraRadius);
+            
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isMouseDown = true;
+                mouseStartX = e.clientX;
+                mouseStartY = e.clientY;
+            });
+            
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (!isMouseDown) return;
+                
+                const deltaX = e.clientX - mouseStartX;
+                const deltaY = e.clientY - mouseStartY;
+                
+                cameraTheta -= deltaX * 0.01;
+                cameraPhi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraPhi + deltaY * 0.01));
+                
+                camera.position.x = controls.target.x + cameraRadius * Math.sin(cameraPhi) * Math.cos(cameraTheta);
+                camera.position.y = controls.target.y + cameraRadius * Math.cos(cameraPhi);
+                camera.position.z = controls.target.z + cameraRadius * Math.sin(cameraPhi) * Math.sin(cameraTheta);
+                
+                mouseStartX = e.clientX;
+                mouseStartY = e.clientY;
+            });
+            
+            renderer.domElement.addEventListener('mouseup', () => {
+                isMouseDown = false;
+            });
+            
+            renderer.domElement.addEventListener('wheel', (e) => {
+                cameraRadius = Math.max(5, Math.min(50, cameraRadius + e.deltaY * 0.01));
+                camera.position.x = controls.target.x + cameraRadius * Math.sin(cameraPhi) * Math.cos(cameraTheta);
+                camera.position.y = controls.target.y + cameraRadius * Math.cos(cameraPhi);
+                camera.position.z = controls.target.z + cameraRadius * Math.sin(cameraPhi) * Math.sin(cameraTheta);
+                e.preventDefault();
+            });
+
+            // Groups
+            scaleGroup = new THREE.Group();
+            tiresGroup = new THREE.Group();
+            pendulumGroup = new THREE.Group();
+            scene.add(scaleGroup);
+            scene.add(tiresGroup);
+            scene.add(pendulumGroup);
+
+            // Lighting
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -25;
+            directionalLight.shadow.camera.right = 25;
+            directionalLight.shadow.camera.top = 25;
+            directionalLight.shadow.camera.bottom = -25;
+            scene.add(directionalLight);
+            
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+            scene.add(ambientLight);
+
+            // Add rail system
+            const railSystem = createRailSystem();
+            scene.add(railSystem);
+
+            cart = createCart();
+            scene.add(cart);
+
+            // Create pendulum system
+            createPendulumSystem();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = threeCanvas.clientWidth / threeCanvas.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(threeCanvas.clientWidth, threeCanvas.clientHeight);
+            });
+
+            // Start render loop
+            requestAnimationFrame(renderThree);
+        }
+
+        function createRailSystem() {
+            const railGroup = new THREE.Group();
+
+            const baseMaterial = new THREE.MeshPhongMaterial({
+                color: 0xC0C0C0
+            });
+
+            // Create base platform
+            const baseGeometry = new THREE.BoxGeometry(railLength + 2, 0.5, 1.9);
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.set(0, 2, 0);
+            base.receiveShadow = true;
+            railGroup.add(base);
+
+            return railGroup;
+        }
+
+        function createTire(radius, tubeRadius, x, y, z) {
+            const tireGroup = new THREE.Group();
+
+            const enhancedTireMaterial = new THREE.MeshPhongMaterial({
+                color: 0x111111,
+                shininess: 10,
+                specular: 0x222222
+            });
+
+            const enhancedRimMaterial = new THREE.MeshPhongMaterial({
+                color: 0xCCCCCC,
+                specular: 0xFFFFFF,
+                shininess: 150
+            });
+
+            const tireGeometry = new THREE.TorusGeometry(radius, tubeRadius, 32, 64);
+            const tire = new THREE.Mesh(tireGeometry, enhancedTireMaterial);
+            tire.castShadow = true;
+            tire.receiveShadow = true;
+
+            const rimGeometry = new THREE.CylinderGeometry(radius * 0.5, radius * 0.5, tubeRadius * 1.6, 32);
+            const rim = new THREE.Mesh(rimGeometry, enhancedRimMaterial);
+            rim.rotation.x = Math.PI / 2;
+            rim.castShadow = true;
+            rim.receiveShadow = true;
+
+            tireGroup.add(tire);
+            tireGroup.add(rim);
+            tireGroup.position.set(x, y, z);
+
+            return tireGroup;
+        }
+
+        function createCart() {
+            const cartGroup = new THREE.Group();
+
+            const mainBodyGeometry = new THREE.BoxGeometry(6, 1, 2);
+            const mainBody = new THREE.Mesh(mainBodyGeometry, rectangleMaterial1);
+            mainBody.position.set(0, 1.7, 0);
+            mainBody.castShadow = true;
+            mainBody.receiveShadow = true;
+            cartGroup.add(mainBody);
+
+            const mainBodyGeometry1 = new THREE.BoxGeometry(3.5, 1, 2);
+            const mainBody1 = new THREE.Mesh(mainBodyGeometry1, rectangleMaterial1);
+            mainBody1.position.set(0, 2.5, 0);
+            mainBody1.castShadow = true;
+            mainBody1.receiveShadow = true;
+            cartGroup.add(mainBody1);
+
+            const mainBodyGeometry2 = new THREE.BoxGeometry(5.6, 1, 1.5);
+            const mainBody2 = new THREE.Mesh(mainBodyGeometry2, rectangleMaterial1);
+            mainBody2.position.set(0, 2.9, 0);
+            mainBody2.castShadow = true;
+            mainBody2.receiveShadow = true;
+            cartGroup.add(mainBody2);
+
+            const leftSupportGeometry = new THREE.BoxGeometry(0.5, 3, 3);
+            const leftSupport = new THREE.Mesh(leftSupportGeometry, rectangleMaterial1);
+            leftSupport.position.set(-3, 2, 0);
+            leftSupport.rotation.z = -0.3;
+            leftSupport.castShadow = true;
+            leftSupport.receiveShadow = true;
+            cartGroup.add(leftSupport);
+
+            const rightSupportGeometry = new THREE.BoxGeometry(0.5, 3, 3);
+            const rightSupport = new THREE.Mesh(rightSupportGeometry, rectangleMaterial1);
+            rightSupport.position.set(3, 2, 0);
+            rightSupport.rotation.z = 0.3;
+            rightSupport.castShadow = true;
+            rightSupport.receiveShadow = true;
+            cartGroup.add(rightSupport);
+
+            const tires = [
+                createTire(1.1, 0.3, -3.5, 0.5, 1),
+                createTire(1.1, 0.3, 3.5, 0.5, 1),
+                createTire(1.1, 0.3, -3.5, 0.5, -1),
+                createTire(1.1, 0.3, 3.5, 0.5, -1),
+                createTire(0.8, 0.3, -2.7, 3.2, 1),
+                createTire(0.8, 0.3, 2.7, 3.2, 1),
+                createTire(0.8, 0.3, -2.7, 3.2, -1),
+                createTire(0.8, 0.3, 2.7, 3.2, -1)
+            ];
+
+            tires.forEach(tire => cartGroup.add(tire));
+            cartGroup.userData.tires = tires;
+
+            return cartGroup;
+        }
+
+        function createPendulumSystem() {
+            // Pendulum mount point (top of cart)
+            const mountGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.5, 16);
+            const mount = new THREE.Mesh(mountGeometry, pendulumMaterial);
+            mount.position.set(0, 3.7, 0);
+            mount.castShadow = true;
+            cart.add(mount);
+
+            // First pendulum rod
+            const rod1Geometry = new THREE.CylinderGeometry(0.1, 0.1, pendulum1Length, 16);
+            pendulumRod1 = new THREE.Mesh(rod1Geometry, pendulumMaterial);
+            pendulumRod1.position.set(0, pendulum1Length/2, 0);
+            pendulumRod1.castShadow = true;
+            
+            // First pendulum bob
+            const bob1Geometry = new THREE.SphereGeometry(0.5, 16, 16);
+            pendulumBob1 = new THREE.Mesh(bob1Geometry, bobMaterial);
+            pendulumBob1.position.set(0, pendulum1Length, 0);
+            pendulumBob1.castShadow = true;
+
+            // Joint for first pendulum
+            const joint1Geometry = new THREE.SphereGeometry(0.2, 16, 16);
+            const joint1 = new THREE.Mesh(joint1Geometry, pendulumMaterial);
+            joint1.position.set(0, 0, 0);
+            joint1.castShadow = true;
+
+            // First pendulum group
+            const pendulum1Group = new THREE.Group();
+            pendulum1Group.add(joint1);
+            pendulum1Group.add(pendulumRod1);
+            pendulum1Group.add(pendulumBob1);
+            pendulum1Group.position.set(0, 3.7, 0);
+            
+            // Second pendulum rod
+            const rod2Geometry = new THREE.CylinderGeometry(0.08, 0.08, pendulum2Length, 16);
+            pendulumRod2 = new THREE.Mesh(rod2Geometry, pendulumMaterial);
+            pendulumRod2.position.set(0, pendulum2Length/2, 0);
+            pendulumRod2.castShadow = true;
+            
+            // Second pendulum bob
+            const bob2Geometry = new THREE.SphereGeometry(0.4, 16, 16);
+            pendulumBob2 = new THREE.Mesh(bob2Geometry, bobMaterial);
+            pendulumBob2.position.set(0, pendulum2Length, 0);
+            pendulumBob2.castShadow = true;
+
+            // Joint for second pendulum
+            const joint2Geometry = new THREE.SphereGeometry(0.15, 16, 16);
+            const joint2 = new THREE.Mesh(joint2Geometry, pendulumMaterial);
+            joint2.position.set(0, 0, 0);
+            joint2.castShadow = true;
+
+            // Second pendulum group
+            const pendulum2Group = new THREE.Group();
+            pendulum2Group.add(joint2);
+            pendulum2Group.add(pendulumRod2);
+            pendulum2Group.add(pendulumBob2);
+            pendulum2Group.position.set(0, pendulum1Length, 0);
+
+            // Add second pendulum to first pendulum
+            pendulum1Group.add(pendulum2Group);
+            
+            // Add first pendulum to cart
+            cart.add(pendulum1Group);
+            
+            // Store references
+            pendulumGroup = pendulum1Group;
+            pendulumGroup.userData.pendulum2 = pendulum2Group;
+        }
+
+        // Double inverted pendulum physics
+        function doublePendulumDynamics(state, force) {
+            const [x, x_dot, theta1, theta1_dot, theta2, theta2_dot] = state;
+            
+            // System parameters
+            const m0 = cartMass;
+            const m1 = pendulum1Mass;
+            const m2 = pendulum2Mass;
+            const L1 = pendulum1Length;
+            const L2 = pendulum2Length;
+            const g = gravity;
+            
+            // Trigonometric terms
+            const s1 = Math.sin(theta1);
+            const c1 = Math.cos(theta1);
+            const s2 = Math.sin(theta2);
+            const c2 = Math.cos(theta2);
+            const s12 = Math.sin(theta1 - theta2);
+            const c12 = Math.cos(theta1 - theta2);
+            
+            // Mass matrix elements
+            const M11 = m0 + m1 + m2;
+            const M12 = (m1 + m2) * L1 * c1;
+            const M13 = m2 * L2 * c2;
+            const M22 = (m1 + m2) * L1 * L1;
+            const M23 = m2 * L1 * L2 * c12;
+            const M33 = m2 * L2 * L2;
+            
+            // Right hand side vector
+            const rhs1 = force - damping * x_dot + (m1 + m2) * L1 * theta1_dot * theta1_dot * s1 + m2 * L2 * theta2_dot * theta2_dot * s2;
+            const rhs2 = -(m1 + m2) * g * L1 * s1 - damping * theta1_dot + m2 * L1 * L2 * theta2_dot * theta2_dot * s12;
+            const rhs3 = -m2 * g * L2 * s2 - damping * theta2_dot - m2 * L1 * L2 * theta1_dot * theta1_dot * s12;
+            
+            // Solve linear system M * [x_ddot, theta1_ddot, theta2_ddot] = rhs
+            const det = M11 * (M22 * M33 - M23 * M23) - M12 * (M12 * M33 - M13 * M23) + M13 * (M12 * M23 - M13 * M22);
+            
+            if (Math.abs(det) < 1e-10) {
+                return [0, 0, 0, 0, 0, 0]; // Singular matrix
+            }
+            
+            const x_ddot = ((M22 * M33 - M23 * M23) * rhs1 - (M12 * M33 - M13 * M23) * rhs2 + (M12 * M23 - M13 * M22) * rhs3) / det;
+            const theta1_ddot = (-(M12 * M33 - M13 * M23) * rhs1 + (M11 * M33 - M13 * M13) * rhs2 - (M11 * M23 - M12 * M13) * rhs3) / det;
+            const theta2_ddot = ((M12 * M23 - M13 * M22) * rhs1 - (M11 * M23 - M12 * M13) * rhs2 + (M11 * M22 - M12 * M12) * rhs3) / det;
+            
+            return [x_dot, x_ddot, theta1_dot, theta1_ddot, theta2_dot, theta2_ddot];
+        }
+
+        // LQR Control for balancing
+        function calculateControlForce(state) {
+            const K = controlMode === 'balance' ? K_balance : K_swing;
+            
+            // Normalize angles to [-pi, pi]
+            let normalizedState = [...state];
+            normalizedState[2] = ((normalizedState[2] + Math.PI) % (2 * Math.PI)) - Math.PI;
+            normalizedState[4] = ((normalizedState[4] + Math.PI) % (2 * Math.PI)) - Math.PI;
+            
+            // Calculate control force
+            let force = 0;
+            for (let i = 0; i < K.length; i++) {
+                force += K[i] * normalizedState[i];
+            }
+            
+            // Limit force
+            return Math.max(-50, Math.min(50, force));
+        }
+
+        // Runge-Kutta 4th order integration
+        function rk4Step(state, force, dt) {
+            const k1 = doublePendulumDynamics(state, force);
+            
+            const state2 = state.map((s, i) => s + k1[i] * dt / 2);
+            const k2 = doublePendulumDynamics(state2, force);
+            
+            const state3 = state.map((s, i) => s + k2[i] * dt / 2);
+            const k3 = doublePendulumDynamics(state3, force);
+            
+            const state4 = state.map((s, i) => s + k3[i] * dt);
+            const k4 = doublePendulumDynamics(state4, force);
+            
+            return state.map((s, i) => s + (k1[i] + 2*k2[i] + 2*k3[i] + k4[i]) * dt / 6);
+        }
+
+        function updatePhysics(dt) {
+            // Calculate control force
+            controlForce = calculateControlForce(state);
+            
+            // Add disturbance occasionally
+            if (Math.random() < 0.001) {
+                controlForce += (Math.random() - 0.5) * 20;
+                document.getElementById('disturbanceStatus').className = 'status-indicator enabled';
+                document.getElementById('disturbanceText').textContent = 'Active';
+                setTimeout(() => {
+                    document.getElementById('disturbanceStatus').className = 'status-indicator disabled';
+                    document.getElementById('disturbanceText').textContent = 'Disabled';
+                }, 500);
+            }
+            
+            // Integrate physics
+            state = rk4Step(state, controlForce, dt);
+            
+            // Constrain cart position
+            state[0] = Math.max(-railLength/2, Math.min(railLength/2, state[0]));
+        }
+
+        function updateVisuals() {
+            // Update cart position
+            cart.position.x = state[0];
+            
+            // Update pendulum rotations
+            if (pendulumGroup && pendulumGroup.userData.pendulum2) {
+                // First pendulum rotation (around Z-axis)
+                pendulumGroup.rotation.z = -state[2];
+                
+                // Second pendulum rotation (relative to first)
+                pendulumGroup.userData.pendulum2.rotation.z = -(state[4] - state[2]);
+            }
+            
+            // Update UI displays
+            document.getElementById('forceValue').textContent = controlForce.toFixed(2);
+            document.getElementById('angle1Value').textContent = (state[2] * 180 / Math.PI).toFixed(1);
+            document.getElementById('angle2Value').textContent = (state[4] * 180 / Math.PI).toFixed(1);
+            document.getElementById('outputValue').textContent = controlForce.toFixed(1);
+            document.getElementById('baseAngleText').textContent = (state[2] * 180 / Math.PI).toFixed(1);
+            document.getElementById('midAngleText').textContent = (state[4] * 180 / Math.PI).toFixed(1);
+            
+            // Update output graph
+            const outputLine = document.getElementById('outputLine');
+            const lineRotation = Math.max(-45, Math.min(45, controlForce * 0.9));
+            outputLine.style.transform = `rotate(${lineRotation}deg)`;
+            
+            // Update pendulum bobs in 2D display
+            const mainBob = document.getElementById('mainBob');
+            const topBob = document.getElementById('topBob');
+            const swing1 = Math.sin(state[2]) * 30;
+            const swing2 = Math.sin(state[4]) * 25;
+            mainBob.style.transform = `translateX(calc(-50% + ${swing1}px))`;
+            topBob.style.transform = `translateX(calc(-50% + ${swing2}px))`;
+        }
+
+        function updateCameraPositionDisplay(camera) {
+            const camPos = document.getElementById('camPos');
+            camPos.textContent = `x: ${camera.position.x.toFixed(2)}, y: ${camera.position.y.toFixed(2)}, z: ${camera.position.z.toFixed(2)}`;
+        }
+
+        function renderThree() {
+            requestAnimationFrame(renderThree);
+
+            // Update physics
+            const dt = 0.016; // 60 FPS
+            updatePhysics(dt);
+            updateVisuals();
+            
+            time += dt;
+            document.getElementById('timeValue').textContent = time.toFixed(1) + 's';
+            document.getElementById('timeDisplay').textContent = time.toFixed(1) + 's';
+
+            // Rotate the tires based on cart movement
+            if (cart.userData.tires) {
+                const tireRotation = state[1] * dt * 5; // Rotation based on velocity
+                cart.userData.tires.forEach(tire => {
+                    tire.rotation.z += tireRotation;
+                });
+            }
+
+            // Update camera controls
+            controls.update();
+            updateCameraPositionDisplay(camera);
+
+            // Render the scene
+            renderer.render(scene, camera);
+        }
+
+        // Animation variables
+        let iteration = 152;
+
+        // Generate angle grid cells
+        function generateAngleGrid(containerId, activePercentage) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            for (let i = 0; i < 100; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'angle-cell';
+                if (Math.random() < activePercentage) {
+                    cell.classList.add('active');
+                }
+                container.appendChild(cell);
+            }
+        }
+
+        function updateAngleGrids() {
+            // Update angle grids based on pendulum angles
+            const angle1Norm = Math.abs(state[2]) / Math.PI;
+            const angle2Norm = Math.abs(state[4]) / Math.PI;
+            
+            generateAngleGrid('angleBase', Math.min(angle1Norm * 0.5, 0.8));
+            generateAngleGrid('angleMid', Math.min(angle2Norm * 0.5, 0.8));
+        }
+
+        // Control system event handlers
+        document.getElementById('balanceBtn').addEventListener('click', function() {
+            controlMode = 'balance';
+            this.classList.add('active');
+            document.getElementById('swingBtn').classList.remove('active');
+        });
+
+        document.getElementById('swingBtn').addEventListener('click', function() {
+            controlMode = 'swing';
+            this.classList.add('active');
+            document.getElementById('balanceBtn').classList.remove('active');
+        });
+
+        // Slider controls
+        document.getElementById('gravitySlider').addEventListener('input', function() {
+            gravity = parseFloat(this.value);
+            document.getElementById('gravityDisplay').textContent = gravity.toFixed(2);
+        });
+
+        document.getElementById('dampingSlider').addEventListener('input', function() {
+            damping = parseFloat(this.value);
+            document.getElementById('dampingDisplay').textContent = damping.toFixed(3);
+        });
+
+        // Checkbox interactions
+        document.querySelectorAll('.checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', function () {
+                this.classList.toggle('checked');
+            });
+        });
+
+        // Animation loop for UI updates
+        function animateUI() {
+            if (Math.random() < 0.05) {
+                iteration++;
+                document.getElementById('iterationValue').textContent = iteration;
+            }
+
+            updateAngleGrids();
+
+            const curvePath = document.getElementById('curvePath');
+            const offset1 = Math.sin(state[2]) * 20;
+            const offset2 = Math.sin(state[4]) * 15;
+            curvePath.setAttribute('d', `M 10,${80 + offset1} Q 50,${20 + offset2} 90,${60 + offset1} Q 130,${100 + offset2} 170,${40 + offset1}`);
+
+            requestAnimationFrame(animateUI);
+        }
+
+        // Initialize everything
+        generateAngleGrid('angleBase', 0.15);
+        generateAngleGrid('angleMid', 0.75);
+        initThreeScene();
+        animateUI();
+    </script>
+
+</body>
+
+</html>
