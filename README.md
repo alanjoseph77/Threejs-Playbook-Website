@@ -1,5 +1,7 @@
 # Three.js Sample Geeks - The Three.js Playbook
 
+[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen?style=for-the-badge&logo=firebase)](https://otaga-2a250.web.app/)
+
 Welcome to **The Three.js Playbook**, a premium interactive platform designed for Three.js enthusiasts and developers. This project provides a unique, retro-styled environment to explore, learn, and experiment with 3D web graphics.
 
 ![The Three.js Playbook Interface](public/img/readmeimg.png)
