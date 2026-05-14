@@ -6,11 +6,11 @@ Welcome to **The Three.js Playbook**, a premium interactive platform designed fo
 
 ![The Three.js Playbook Interface](public/img/readmeimg.png)
 
-## 🚀 Overview
+## Overview
 
 The Three.js Playbook is more than just a documentation site; it's an interactive experience. Featuring a custom-built Retro IDE, GSAP-powered transitions, and a curated set of Three.js examples, it offers a hands-on approach to mastering 3D on the web.
 
-## ✨ Key Features
+## Key Features
 
 - **Retro HTML IDE**: A fully functional code editor with a vintage aesthetic, allowing you to write and preview Three.js code in real-time.
 - **Interactive Playground**: Experiment with various Three.js concepts directly in the browser.
@@ -19,7 +19,7 @@ The Three.js Playbook is more than just a documentation site; it's an interactiv
 - **Responsive Design**: A premium, "earthy" theme that works seamlessly across all device sizes.
 - **Firebase Integration**: Built for easy deployment and hosting via Firebase.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Core**: HTML5, CSS3, JavaScript
 - **3D Engine**: [Three.js](https://threejs.org/)
@@ -28,7 +28,7 @@ The Three.js Playbook is more than just a documentation site; it's an interactiv
 - **Hosting**: [Firebase](https://firebase.google.com/)
 - **Typography**: Google Fonts (Oswald, Orbitron, Space Mono, Poppins, VT323)
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 SAMPLEGEEKSWEBSITE/
@@ -42,7 +42,7 @@ SAMPLEGEEKSWEBSITE/
 └── README.md           # Project documentation
 ```
 
-## 🚦 Getting Started
+## Getting Started
 
 To run this project locally:
 
@@ -66,10 +66,10 @@ To run this project locally:
 4.  **Open in Browser**:
     Visit `http://localhost:8000` (or the port specified by your server).
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ---
 
-Built with ❤️ by [Sample Geeks](https://samplegeeks.com)
+Built by [Sample Geeks](https://samplegeeks.com)
